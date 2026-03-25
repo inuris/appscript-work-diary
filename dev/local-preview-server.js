@@ -19,6 +19,38 @@ var REPO_ROOT = path.join(__dirname, "..");
 var STORE_FILE = path.join(__dirname, "local-diary-data.json");
 var DEFAULT_PORT = 3333;
 
+/**
+ * Load repo-root `.env` into process.env (does not override vars already set —
+ * shell, launch.json, or VS Code envFile still win). Node has no built-in
+ * dotenv; this matches most teams’ expectations for npm run preview / F5.
+ */
+function loadRepoDotEnv() {
+  var envPath = path.join(REPO_ROOT, ".env");
+  var raw;
+  try {
+    raw = fs.readFileSync(envPath, "utf8");
+  } catch (e) {
+    if (e.code === "ENOENT") return;
+    throw e;
+  }
+  if (raw.length && raw.charCodeAt(0) === 0xfeff) raw = raw.slice(1);
+  raw.split(/\r?\n/).forEach(function (line) {
+    var t = line.trim();
+    if (!t || t.charAt(0) === "#") return;
+    var eq = t.indexOf("=");
+    if (eq <= 0) return;
+    var key = t.slice(0, eq).trim();
+    var val = t.slice(eq + 1).trim();
+    if (
+      (val.charAt(0) === '"' && val.charAt(val.length - 1) === '"') ||
+      (val.charAt(0) === "'" && val.charAt(val.length - 1) === "'")
+    ) {
+      val = val.slice(1, -1);
+    }
+    if (typeof process.env[key] === "undefined") process.env[key] = val;
+  });
+}
+
 function readUtf8(relFromRoot) {
   return fs.readFileSync(path.join(REPO_ROOT, relFromRoot), "utf8");
 }
@@ -350,8 +382,73 @@ function jsonResponse(res, obj) {
   res.end(body);
 }
 
+/** Port the HTTP server is listening on (for DIARY_APP_CONFIG in HTML). */
+function getBoundPort(server) {
+  var a = server.address();
+  if (a && typeof a === "object" && a.port) return a.port;
+  return DEFAULT_PORT;
+}
+
+/**
+ * If PORT is set in the environment, bind only that port (fail if busy).
+ * Otherwise try DEFAULT_PORT, then DEFAULT_PORT+1, … (typical when an old
+ * preview or debugger session still holds 3333).
+ */
+function listenAvailable(server, host, preferredPort, portLocked, done) {
+  var maxSpan = 40;
+  function tryOnce(p) {
+    function onErr(err) {
+      server.removeListener("error", onErr);
+      if (err && err.code === "EADDRINUSE" && !portLocked) {
+        if (p - preferredPort + 1 >= maxSpan) {
+          done(err, p);
+          return;
+        }
+        console.warn("Port " + p + " is in use; trying " + (p + 1) + "…");
+        tryOnce(p + 1);
+        return;
+      }
+      if (err && err.code === "EADDRINUSE" && portLocked) {
+        console.error(
+          "Port " +
+            p +
+            " is already in use (another Node preview, or a debugger still attached to a previous run)."
+        );
+        console.error(
+          "Fix: stop the other terminal / debug session, or change PORT in .env. " +
+            "Or remove PORT from .env so this server picks the next free port automatically."
+        );
+      }
+      done(err, p);
+    }
+    server.once("error", onErr);
+    server.listen(p, host, function () {
+      server.removeListener("error", onErr);
+      done(null, p);
+    });
+  }
+  tryOnce(preferredPort);
+}
+
 function main() {
-  var port = Number(process.env.PORT) || DEFAULT_PORT;
+  loadRepoDotEnv();
+  var rawPort = process.env.PORT;
+  var portLocked =
+    rawPort !== undefined &&
+    rawPort !== null &&
+    String(rawPort).trim() !== "";
+  var preferredPort = portLocked
+    ? parseInt(String(rawPort).trim(), 10)
+    : DEFAULT_PORT;
+  if (
+    portLocked &&
+    (!Number.isFinite(preferredPort) ||
+      preferredPort < 1 ||
+      preferredPort > 65535)
+  ) {
+    console.error("Invalid PORT: " + String(rawPort));
+    process.exit(1);
+  }
   var store = loadStore();
   var remoteBase = getRemoteWebAppBaseUrl();
 
@@ -375,7 +472,7 @@ function main() {
         }
         return jsonResponse(res, { ok: true, entries: readAllSorted(store) });
       }
-      var html = buildAssembledIndex(port, {
+      var html = buildAssembledIndex(getBoundPort(server), {
         remoteBackend: Boolean(remoteBase),
       });
       var htmlBuf = Buffer.from(html, "utf8");
@@ -427,21 +524,43 @@ function main() {
     res.end("Not found");
   });
 
-  server.listen(port, "127.0.0.1", function () {
-    var lines = [
-      "Diary local preview — open http://127.0.0.1:" + port + "/",
-    ];
-    if (remoteBase) {
-      lines.push("  Backend: Google Sheet (proxy → deployed web app)");
-      lines.push("  Remote:  " + remoteBase);
-    } else {
-      lines.push("  Backend: local JSON — " + STORE_FILE);
-      lines.push(
-        "  Sheet:   set DIARY_REMOTE_WEBAPP_URL=…/exec to use your live Sheet"
-      );
+  var listenReady = false;
+  listenAvailable(
+    server,
+    "127.0.0.1",
+    preferredPort,
+    portLocked,
+    function (err, boundPort) {
+      if (listenReady) return;
+      if (err) {
+        process.exitCode = 1;
+        return;
+      }
+      listenReady = true;
+      var lines = [
+        "Diary local preview — open http://127.0.0.1:" + boundPort + "/",
+      ];
+      if (!portLocked && boundPort !== preferredPort) {
+        lines.push(
+          "  (PORT was not set; " +
+            preferredPort +
+            " was busy, using " +
+            boundPort +
+            ".)"
+        );
+      }
+      if (remoteBase) {
+        lines.push("  Backend: Google Sheet (proxy → deployed web app)");
+        lines.push("  Remote:  " + remoteBase);
+      } else {
+        lines.push("  Backend: local JSON — " + STORE_FILE);
+        lines.push(
+          "  Sheet:   set DIARY_REMOTE_WEBAPP_URL=…/exec to use your live Sheet"
+        );
+      }
+      console.log(lines.join("\n"));
     }
-    console.log(lines.join("\n"));
-  });
+  );
 }
 
 main();
