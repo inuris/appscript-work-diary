@@ -5,6 +5,15 @@
  */
 var HEADERS = ["id", "created_at", "raw_text", "summary", "tags", "sentiment"];
 
+function normalizeLineEndings_(s) {
+  return String(s == null ? "" : s).replace(/\r\n/g, "\n").replace(/\r/g, "\n");
+}
+
+/** True when there is no non-whitespace content (newlines alone are allowed as “content”). */
+function isEffectivelyEmptyText_(s) {
+  return !/[^\s\u00A0]/.test(normalizeLineEndings_(s));
+}
+
 function getSheet_() {
   return SpreadsheetApp.openById(APP_CONFIG.SS_ID).getSheetById(APP_CONFIG.SHEET_GID);
 }
@@ -29,8 +38,8 @@ function rowToObject_(row) {
   return {
     id: row[0],
     created_at: row[1] === "" || row[1] == null ? "" : String(row[1]),
-    raw_text: row[2] == null ? "" : String(row[2]),
-    summary: row[3] == null ? "" : String(row[3]),
+    raw_text: normalizeLineEndings_(row[2] == null ? "" : String(row[2])),
+    summary: normalizeLineEndings_(row[3] == null ? "" : String(row[3])),
     tags: parseTags_(row[4]),
     sentiment: row[5] == null || row[5] === "" ? null : String(row[5]),
   };
@@ -62,8 +71,7 @@ function isLikelyHeaderRow_(row) {
 }
 
 function isBlankRow_(row) {
-  var raw = String(row[2] == null ? "" : row[2]).trim();
-  return !raw;
+  return isEffectivelyEmptyText_(row[2] == null ? "" : row[2]);
 }
 
 function readAllEntries_() {
@@ -106,8 +114,8 @@ function nextId_(sheet) {
 }
 
 function handleCreate_(p) {
-  var raw = String(p.raw_text || "").trim();
-  if (!raw) return { ok: false, error: "raw_text is required" };
+  var raw = normalizeLineEndings_(p.raw_text);
+  if (isEffectivelyEmptyText_(raw)) return { ok: false, error: "raw_text is required" };
 
   var sheet = getSheet_();
   ensureHeaders_(sheet);
@@ -115,7 +123,7 @@ function handleCreate_(p) {
   var created = p.created_at && String(p.created_at).trim()
     ? String(p.created_at).trim()
     : formatDateTime_(new Date());
-  var summary = String(p.summary || "").trim();
+  var summary = normalizeLineEndings_(p.summary);
   var tags = normalizeTagsInput_(p.tags);
   var sentiment = normalizeSentiment_(p.sentiment);
 
@@ -126,8 +134,8 @@ function handleCreate_(p) {
 function handleUpdate_(p) {
   var id = Number(p.id);
   if (!id) return { ok: false, error: "id is required" };
-  var raw = String(p.raw_text || "").trim();
-  if (!raw) return { ok: false, error: "raw_text is required" };
+  var raw = normalizeLineEndings_(p.raw_text);
+  if (isEffectivelyEmptyText_(raw)) return { ok: false, error: "raw_text is required" };
 
   var sheet = getSheet_();
   ensureHeaders_(sheet);
@@ -135,7 +143,7 @@ function handleUpdate_(p) {
   if (rowIndex < 0) return { ok: false, error: "entry not found" };
 
   var cur = rowToObject_(sheet.getRange(rowIndex, 1, 1, HEADERS.length).getValues()[0]);
-  var summary = p.hasOwnProperty("summary") ? String(p.summary || "").trim() : cur.summary;
+  var summary = p.hasOwnProperty("summary") ? normalizeLineEndings_(p.summary) : cur.summary;
   var tags = p.hasOwnProperty("tags") ? normalizeTagsInput_(p.tags) : cur.tags;
   var sentiment = p.hasOwnProperty("sentiment")
     ? normalizeSentiment_(p.sentiment)

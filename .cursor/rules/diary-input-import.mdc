@@ -16,8 +16,8 @@ Return ONLY valid JSON (no markdown fences, no prose):
   "logs": [
     {
       "created_at": "YYYY-MM-DD HH:MM:SS",
-      "raw_text": "original diary text",
-      "summary": "1-2 concise sentences",
+      "raw_text": "verbatim user text — keep unchanged",
+      "summary": "minimal rewrite, no filler",
       "tags": ["lowercase-tag-1", "lowercase-tag-2"],
       "sentiment": "Positive|Negative|Neutral"
     }
@@ -27,8 +27,8 @@ Return ONLY valid JSON (no markdown fences, no prose):
 
 ## Constraints
 
-- `raw_text` is required and should preserve user meaning.
-- `summary` should be concise and factual.
+- `raw_text` is required: keep the user’s wording/content as given (verbatim); do not paraphrase or embellish.
+- `summary` must stay faithful to what happened; if you shorten it, make it as short as possible — no filler, hedging, or extra words.
 - `tags` should be lowercase, deduplicated, and max 12 per log.
 - `sentiment` must be exactly one of `Positive`, `Negative`, `Neutral`.
 - `created_at` is optional; if unknown, still keep key with best estimate in local time.

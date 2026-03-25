@@ -27,6 +27,8 @@
       if (!Number.isNaN(n)) out.id = n;
     }
     if (!Array.isArray(out.tags)) out.tags = [];
+    if (out.raw_text != null) out.raw_text = normalizeLineEndings(out.raw_text);
+    if (out.summary != null) out.summary = normalizeLineEndings(out.summary);
     return out;
   }
 
@@ -92,8 +94,18 @@
       .replace(/'/g, "&#39;");
   }
 
+  /** Normalize CRLF/CR to LF for sheet cells, imports, and textareas. */
+  function normalizeLineEndings(text) {
+    return String(text || "").replace(/\r\n/g, "\n").replace(/\r/g, "\n");
+  }
+
+  /** True when there is no non-whitespace character (for “is this entry / field empty?”). */
+  function isEffectivelyEmptyText(text) {
+    return !/[^\s\u00A0]/.test(normalizeLineEndings(text));
+  }
+
   function formatText(text, _from, _to) {
-    text = String(text || "");
+    text = normalizeLineEndings(text);
     var result;
     if (_from !== undefined && _to !== undefined) {
       result =
@@ -705,7 +717,7 @@
     var btn = $("btn-save");
     var desc = $("entry-desc");
     if (!btn || !desc) return;
-    btn.disabled = !desc.value.trim() || S.saveInFlight;
+    btn.disabled = isEffectivelyEmptyText(desc.value) || S.saveInFlight;
     btn.textContent = "Save";
   }
 
@@ -713,7 +725,7 @@
     var btn = $("btn-import");
     var ta = $("import-json");
     if (!btn || !ta) return;
-    btn.disabled = S.importInFlight || !ta.value.trim();
+    btn.disabled = S.importInFlight || isEffectivelyEmptyText(ta.value);
     btn.textContent = "Import";
   }
 
@@ -829,7 +841,7 @@
         parts.push('<div class="btn-row">');
         parts.push(
           '<button type="button" data-action="save-edit" id="btn-save-edit" ' +
-            (S.editInFlight || !S.editDraft.trim() ? "disabled" : "") +
+            (S.editInFlight || isEffectivelyEmptyText(S.editDraft) ? "disabled" : "") +
             ">" +
             (S.editInFlight ? "Saving…" : "Save Edit") +
             "</button>"
@@ -945,7 +957,7 @@
     if (t.getAttribute("data-edit-desc")) {
       S.editDraft = t.value;
       var b = $("btn-save-edit");
-      if (b) b.disabled = S.editBusy || !S.editDraft.trim();
+      if (b) b.disabled = S.editBusy || isEffectivelyEmptyText(S.editDraft);
     } else if (t.getAttribute("data-edit-title")) {
       S.editTitle = t.value;
     } else if (t.getAttribute("data-edit-tags")) {
@@ -978,10 +990,10 @@
     var descEl = $("entry-desc");
     var tagsEl = $("entry-tags");
     if (!descEl || !S.transport) return;
-    var raw_text = descEl.value.trim();
-    if (!raw_text) return;
+    var raw_text = normalizeLineEndings(descEl.value);
+    if (isEffectivelyEmptyText(raw_text)) return;
     if (S.saveInFlight) return;
-    var summary = titleEl ? titleEl.value.trim() : "";
+    var summary = titleEl ? normalizeLineEndings(titleEl.value) : "";
     var tags = tagsEl ? parseTagsFromInput(tagsEl.value) : [];
     S.saveInFlight = true;
     beginSync();
@@ -1015,11 +1027,11 @@
   }
 
   function updateEntry() {
-    if (!S.editingId || !S.editDraft.trim() || !S.transport) return;
+    if (!S.editingId || isEffectivelyEmptyText(S.editDraft) || !S.transport) return;
     if (S.editInFlight) return;
     var id = S.editingId;
-    var draft = S.editDraft.trim();
-    var title = String(S.editTitle || "").trim();
+    var draft = normalizeLineEndings(S.editDraft);
+    var title = normalizeLineEndings(S.editTitle || "");
     var tags = parseTagsFromInput(S.editTags);
     S.editInFlight = true;
     paintEntryList();
@@ -1052,7 +1064,7 @@
   function importLogs() {
     var ta = $("import-json");
     if (!ta || !S.transport) return;
-    if (!ta.value.trim()) return;
+    if (isEffectivelyEmptyText(ta.value)) return;
     if (S.importInFlight) return;
     S.importInFlight = true;
     beginSync();
