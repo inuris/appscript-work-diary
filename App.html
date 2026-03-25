@@ -361,26 +361,37 @@
         window.addEventListener("scroll", closeTagMenu, true);
         window.addEventListener("resize", closeTagMenu);
 
-        if (
-          typeof window !== "undefined" &&
-          window.location.protocol === "file:"
-        ) {
-          runtimeWarning.value =
-            "Do not open this page as file://. Serve it over http (e.g. npx serve) — otherwise the browser blocks requests to Google Apps Script.";
-        }
-
-        if (isGasHosted()) {
-          transport.value = window.DiaryTransport.createAppsScriptRunTransport();
-        } else {
-          var base = getAppScriptBaseUrl();
-          if (!base) {
-            loadError.value =
-              "Set APPS_SCRIPT_URL in window.DIARY_APP_CONFIG (or open this UI from the Apps Script Web App).";
-          } else {
-            transport.value = window.DiaryTransport.createHttpTransport(base);
+        try {
+          if (
+            typeof window !== "undefined" &&
+            window.location.protocol === "file:"
+          ) {
+            runtimeWarning.value =
+              "Do not open this page as file://. Serve it over http (e.g. npx serve) — otherwise the browser blocks requests to Google Apps Script.";
           }
+
+          var DT = window.DiaryTransport;
+          if (!DT || typeof DT.createAppsScriptRunTransport !== "function") {
+            loadError.value =
+              "Client bootstrap missing: window.DiaryTransport must be defined in Index.html before this script (HtmlService often skips scripts inside include() files).";
+            return;
+          }
+
+          if (isGasHosted()) {
+            transport.value = DT.createAppsScriptRunTransport();
+          } else {
+            var base = getAppScriptBaseUrl();
+            if (!base) {
+              loadError.value =
+                "Set APPS_SCRIPT_URL in window.DIARY_APP_CONFIG (or open this UI from the Apps Script Web App).";
+            } else {
+              transport.value = DT.createHttpTransport(base);
+            }
+          }
+          void loadEntries();
+        } catch (e) {
+          loadError.value = (e && e.message) || String(e);
         }
-        void loadEntries();
       });
 
       onBeforeUnmount(function () {
