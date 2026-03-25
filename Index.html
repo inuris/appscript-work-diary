@@ -1,11 +1,12 @@
 <!DOCTYPE html>
+<!-- Index.html — HtmlService template: shell markup, DIARY_APP_CONFIG, inline DiaryTransport, then DiaryVueMount. -->
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Personal Diary</title>
   <script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
-  <?!= include('Styles'); ?>
+  <?!= include('DiaryStyles'); ?>
 </head>
 <body>
   <script>
@@ -112,7 +113,7 @@ Rules: keep tags lowercase; max 12 tags per log; do not include markdown fences.
     </div>
   </div>
 
-  <!-- Transport must live in this file (not include()). HtmlService often does not run scripts from included HTML. -->
+  <!-- window.DiaryTransport: must stay identical to DiaryTransport.inline.html (HtmlService skips scripts in include() files). -->
   <script>
   window.DiaryTransport = (function () {
     function run(funcName, payload) {
@@ -216,6 +217,6 @@ Rules: keep tags lowercase; max 12 tags per log; do not include markdown fences.
     };
   })();
   </script>
-  <?!= include('App'); ?>
+  <?!= include('DiaryVueMount'); ?>
 </body>
 </html>

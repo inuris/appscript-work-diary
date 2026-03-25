@@ -1,6 +1,8 @@
 /**
- * App entry + transport wrappers.
- * Keep this file small; sheet/domain logic lives in Repo.gs.
+ * Web app entrypoint: HTTP + HtmlService.
+ * - doGet / doPost: public API for external clients
+ * - api*: same handlers for google.script.run from the hosted UI
+ * Sheet CRUD lives in DiarySheetStore.gs.
  */
 var APP_CONFIG = {
   SS_ID: "1I7uKQc4Zm0Ak9YLdDPRZLiLQb2V5hO-N9jle_UJlO9Q",

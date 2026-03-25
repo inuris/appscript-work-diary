@@ -1,3 +1,8 @@
+<!--
+  DiaryVueMount.html — Vue 3 diary UI (state, actions, list/filter/edit).
+  Loaded via <?!= include('DiaryVueMount'); ?> from Index.html.
+  Expects: Vue global, #app in Index, and window.DiaryTransport defined earlier in Index (inline).
+-->
 <script>
 (function () {
   const { createApp, ref, onMounted, onBeforeUnmount } = Vue;
@@ -373,7 +378,7 @@
           var DT = window.DiaryTransport;
           if (!DT || typeof DT.createAppsScriptRunTransport !== "function") {
             loadError.value =
-              "Client bootstrap missing: window.DiaryTransport must be defined in Index.html before this script (HtmlService often skips scripts inside include() files).";
+              "Missing window.DiaryTransport: keep the inline script in Index.html in sync with DiaryTransport.inline.html (HtmlService does not run that file via include).";
             return;
           }
 

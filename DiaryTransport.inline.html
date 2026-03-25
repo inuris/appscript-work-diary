@@ -1,7 +1,15 @@
 <!--
-  HtmlService: scripts in files loaded via include() are often NOT executed.
-  The live copy of this client is inlined in Index.html (search for DiaryTransport).
-  This file stays in the repo as the single source to edit; copy changes into Index.html.
+  DiaryTransport.inline.html — SOURCE for client↔server wiring (NOT loaded via include()).
+
+  What this is:
+    Builds window.DiaryTransport with two backends:
+    - createAppsScriptRunTransport() → google.script.run → apiList, apiCreate, …
+    - createHttpTransport(baseUrl)    → fetch GET/POST to your Web App URL
+
+  Where it runs:
+    Google Apps Script HtmlService often ignores <script> inside include() files.
+    So the working copy is pasted INLINE inside Index.html (search "window.DiaryTransport").
+    When you edit THIS file, copy the <script>…</script> block into Index.html and redeploy.
 -->
 <script>
 window.DiaryTransport = (function () {
@@ -62,21 +70,25 @@ window.DiaryTransport = (function () {
         method: "POST",
         headers: { "Content-Type": "text/plain;charset=UTF-8" },
         body: JSON.stringify({ action: action, payload: payload || {} }),
-      }).then(function (r) {
-        return r.json();
-      }).then(function (data) {
-        if (!data.ok) throw new Error(data.error || "Apps Script error");
-        return data;
-      });
+      })
+        .then(function (r) {
+          return r.json();
+        })
+        .then(function (data) {
+          if (!data.ok) throw new Error(data.error || "Apps Script error");
+          return data;
+        });
     }
     return {
       list: function () {
-        return fetch(baseUrl + "?action=list").then(function (r) {
-          return r.json();
-        }).then(function (data) {
-          if (!data.ok) throw new Error(data.error || "Apps Script error");
-          return data.entries || [];
-        });
+        return fetch(baseUrl + "?action=list")
+          .then(function (r) {
+            return r.json();
+          })
+          .then(function (data) {
+            if (!data.ok) throw new Error(data.error || "Apps Script error");
+            return data.entries || [];
+          });
       },
       create: function (payload) {
         return post("create", payload);

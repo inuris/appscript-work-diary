@@ -1,6 +1,7 @@
 /**
- * Sheet repository and business logic.
- * This file can be reused later by a different host layer.
+ * Diary persistence on Google Sheets (rows, import, tags).
+ * No HTTP — only plain functions used by WebAppHost.gs.
+ * You can lift these handlers into another backend later.
  */
 var HEADERS = ["id", "created_at", "raw_text", "summary", "tags", "sentiment"];
 
