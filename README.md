@@ -5,7 +5,7 @@ Personal diary backed by a Google Sheet. This repo is the script project you cop
 ## How the pieces fit together
 
 ```text
-Browser (hosted UI from HtmlService)
+Browser (hosted UI from HtmlService — **no Vue**, vanilla JS + one list `innerHTML` paint per search)
     │
     │  window.DiaryTransport  ←─ list / create / update / …
     │         │
@@ -24,13 +24,13 @@ Server (.gs)      ▼
 |------|------|
 | **`WebAppHost.gs`** | Web app entry: `doGet` / `doPost`, `include()`, `google.script.run` handlers (`apiList`, …), `APP_CONFIG`. |
 | **`DiarySheetStore.gs`** | All sheet logic: read/write entries, import, append tag. Callable from any future host. |
-| **`Index.html`** | **Shell page**: Vue CDN, markup, `DIARY_APP_CONFIG`, **inline** `window.DiaryTransport` script, then `include('DiaryVueMount')`. |
+| **`Index.html`** | **Shell page**: markup, `DIARY_APP_CONFIG`, **inline** `window.DiaryTransport`, then `include('DiaryUiVanilla')` (~no framework). |
 | **`DiaryTransport.inline.html`** | **Editable source** for that inline script — *not* loaded with `include()`; copy into `Index.html` after changes. |
-| **`DiaryVueMount.html`** | **Vue UI**: `createApp`, state, filters, save/edit/import — mounts `#app` from `Index.html`. |
+| **`DiaryUiVanilla.html`** | **UI logic**: preload list once; `ref/script.js`-style match priority; **single DOM paint** for the entry list on each keystroke (fast, minimal JS). |
 | **`DiaryStyles.html`** | CSS only (`include('DiaryStyles')`). |
 | `appsscript.json` | Time zone, runtime, web-app defaults. |
 
-**Why the odd “inline” file?** HtmlService often does **not** execute `<script>` inside files pulled in with `include()`. The transport **must** live in `Index.html` so `DiaryTransport` exists before `DiaryVueMount` runs. `DiaryTransport.inline.html` is the repo-friendly place to edit that logic; keep the two copies in sync.
+**Why the odd “inline” file?** HtmlService often does **not** execute `<script>` inside files pulled in with `include()`. The transport **must** live in `Index.html` so `DiaryTransport` exists before `DiaryUiVanilla` runs. `DiaryTransport.inline.html` is the repo-friendly place to edit that logic; keep the two copies in sync.
 
 ## Configure
 

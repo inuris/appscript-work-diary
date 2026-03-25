@@ -1,0 +1,827 @@
+<!--
+  DiaryUiVanilla.html — no Vue; plain DOM + one list paint per filter (fast typing).
+  Same search/match logic as before; load <?!= include('DiaryUiVanilla'); ?> from Index.html after DiaryTransport.
+-->
+<script>
+(function () {
+  function $(id) {
+    return document.getElementById(id);
+  }
+
+  function getAppScriptBaseUrl() {
+    var cfg = window.DIARY_APP_CONFIG || {};
+    return String(cfg.APPS_SCRIPT_URL || "")
+      .trim()
+      .replace(/\/$/, "");
+  }
+
+  function isGasHosted() {
+    return (
+      typeof google !== "undefined" &&
+      google.script &&
+      typeof google.script.run !== "undefined"
+    );
+  }
+
+  function normalizeEntry(e) {
+    var out = Object.assign({}, e);
+    if (out.id != null && out.id !== "") {
+      var n = parseInt(String(out.id), 10);
+      if (!Number.isNaN(n)) out.id = n;
+    }
+    if (!Array.isArray(out.tags)) out.tags = [];
+    return out;
+  }
+
+  function trimAccent(phrase) {
+    return String(phrase || "")
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .replace(/đ/g, "d")
+      .replace(/Đ/g, "D")
+      .replace(/[^a-zA-Z0-9 ]/g, " ");
+  }
+
+  function buildNonAccentIndexMap(orig) {
+    var lower = String(orig || "").toLowerCase();
+    var map = [];
+    var prev = "";
+    var i;
+    for (i = 0; i < lower.length; i++) {
+      var next = trimAccent(lower.substring(0, i + 1));
+      var k = prev.length;
+      while (k < next.length) {
+        map.push(i);
+        k++;
+      }
+      prev = next;
+    }
+    return map;
+  }
+
+  function escapeHtml(text) {
+    return String(text || "")
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;")
+      .replace(/'/g, "&#39;");
+  }
+
+  function escapeAttr(text) {
+    return String(text || "")
+      .replace(/&/g, "&amp;")
+      .replace(/"/g, "&quot;")
+      .replace(/'/g, "&#39;");
+  }
+
+  function formatText(text, _from, _to) {
+    text = String(text || "");
+    var result;
+    if (_from !== undefined && _to !== undefined) {
+      result =
+        escapeHtml(text.substring(0, _from)) +
+        '<span class="highlight">' +
+        escapeHtml(text.substring(_from, _to)) +
+        "</span>" +
+        escapeHtml(text.substring(_to));
+    } else {
+      result = escapeHtml(text);
+    }
+    return result.replace(/\n/g, "<br>");
+  }
+
+  function formatTagsPlain(tags) {
+    if (!tags || !tags.length) return [];
+    return tags.map(function (t) {
+      return { text: t, html: escapeHtml(String(t)) };
+    });
+  }
+
+  function formatTagsLowerMatch(tags, keyword) {
+    var kw = keyword.toLowerCase();
+    return tags.map(function (t) {
+      var s = String(t);
+      var lower = s.toLowerCase();
+      var idx = lower.indexOf(kw);
+      if (idx < 0) return { text: t, html: escapeHtml(s) };
+      return { text: t, html: formatText(s, idx, idx + kw.length) };
+    });
+  }
+
+  function formatTagsNonAccentMatch(tags, keywordNonAccent) {
+    var kn = keywordNonAccent;
+    return tags.map(function (t) {
+      var s = String(t);
+      var tn = trimAccent(s.toLowerCase());
+      var idx = tn.indexOf(kn);
+      if (idx < 0) return { text: t, html: escapeHtml(s) };
+      var map = buildNonAccentIndexMap(s);
+      if (!map.length || idx + kn.length > map.length) {
+        return { text: t, html: escapeHtml(s) };
+      }
+      var startOrig = map[idx];
+      var endOrig = map[Math.min(idx + kn.length - 1, map.length - 1)] + 1;
+      return { text: t, html: formatText(s, startOrig, endOrig) };
+    });
+  }
+
+  function enrichEntry(e) {
+    var ne = normalizeEntry(e);
+    var raw = ne.raw_text || "";
+    var summary = ne.summary || "";
+    var rawL = raw.toLowerCase();
+    var sumL = summary.toLowerCase();
+    var tags = ne.tags || [];
+    var tagsJoined = tags.map(function (t) {
+      return String(t);
+    }).join(" ");
+    var tagsL = tagsJoined.toLowerCase();
+    return Object.assign({}, ne, {
+      _rawLower: rawL,
+      _rawNonAccent: trimAccent(rawL),
+      _rawNaMap: buildNonAccentIndexMap(raw),
+      _summaryLower: sumL,
+      _summaryNonAccent: trimAccent(sumL),
+      _summaryNaMap: buildNonAccentIndexMap(summary),
+      _tagsLower: tagsL,
+      _tagsNonAccent: trimAccent(tagsL),
+      _tagsNaMap: buildNonAccentIndexMap(tagsJoined),
+    });
+  }
+
+  function matchDiaryKeyword(keyword, d) {
+    var keywordNonAccent = trimAccent(keyword);
+    var raw = d.raw_text || "";
+    var index = d._rawLower.indexOf(keyword);
+    if (index >= 0) {
+      return {
+        prior: 4,
+        rawHtml: formatText(raw, index, index + keyword.length),
+        summaryHtml: formatText(d.summary || ""),
+        tagSpans: formatTagsPlain(d.tags),
+      };
+    }
+    index = d._summaryLower.indexOf(keyword);
+    if (index >= 0) {
+      return {
+        prior: 3,
+        rawHtml: formatText(raw),
+        summaryHtml: formatText(d.summary || "", index, index + keyword.length),
+        tagSpans: formatTagsPlain(d.tags),
+      };
+    }
+    index = d._tagsLower.indexOf(keyword);
+    if (index >= 0) {
+      return {
+        prior: 3,
+        rawHtml: formatText(raw),
+        summaryHtml: formatText(d.summary || ""),
+        tagSpans: formatTagsLowerMatch(d.tags, keyword),
+      };
+    }
+    index = d._rawNonAccent.indexOf(keywordNonAccent);
+    if (index >= 0) {
+      var mapR = d._rawNaMap;
+      var startR = mapR[index];
+      var endR =
+        mapR[Math.min(index + keywordNonAccent.length - 1, mapR.length - 1)] + 1;
+      return {
+        prior: 2,
+        rawHtml: formatText(raw, startR, endR),
+        summaryHtml: formatText(d.summary || ""),
+        tagSpans: formatTagsPlain(d.tags),
+      };
+    }
+    index = d._summaryNonAccent.indexOf(keywordNonAccent);
+    if (index >= 0) {
+      var sum = d.summary || "";
+      var mapS = d._summaryNaMap;
+      var startS = mapS[index];
+      var endS =
+        mapS[Math.min(index + keywordNonAccent.length - 1, mapS.length - 1)] + 1;
+      return {
+        prior: 1,
+        rawHtml: formatText(raw),
+        summaryHtml: formatText(sum, startS, endS),
+        tagSpans: formatTagsPlain(d.tags),
+      };
+    }
+    index = d._tagsNonAccent.indexOf(keywordNonAccent);
+    if (index >= 0) {
+      return {
+        prior: 1,
+        rawHtml: formatText(raw),
+        summaryHtml: formatText(d.summary || ""),
+        tagSpans: formatTagsNonAccentMatch(d.tags, keywordNonAccent),
+      };
+    }
+    return { prior: 0, rawHtml: "", summaryHtml: "", tagSpans: [] };
+  }
+
+  function passesTagFilter(d, tagLower) {
+    if (!tagLower) return true;
+    var tags = d.tags || [];
+    for (var i = 0; i < tags.length; i++) {
+      if (String(tags[i]).toLowerCase() === tagLower) return true;
+    }
+    return false;
+  }
+
+  function buildViewRows(fullData, searchQ, tagFilter) {
+    var tagLower = String(tagFilter || "").trim().toLowerCase();
+    var keyword = String(searchQ || "").trim().toLowerCase();
+    var out = [];
+    var i;
+    for (i = 0; i < fullData.length; i++) {
+      var enriched = fullData[i];
+      if (!passesTagFilter(enriched, tagLower)) continue;
+      if (!keyword) {
+        out.push({
+          prior: 0,
+          entry: enriched,
+          rawHtml: formatText(enriched.raw_text || ""),
+          summaryHtml: enriched.summary ? formatText(enriched.summary) : "",
+          tagSpans: formatTagsPlain(enriched.tags),
+        });
+        continue;
+      }
+      var m = matchDiaryKeyword(keyword, enriched);
+      if (m.prior === 0) continue;
+      out.push({
+        prior: m.prior,
+        entry: enriched,
+        rawHtml: m.rawHtml,
+        summaryHtml: m.summaryHtml,
+        tagSpans: m.tagSpans,
+      });
+    }
+    out.sort(function (a, b) {
+      if (b.prior !== a.prior) return b.prior - a.prior;
+      return String(b.entry.created_at || "").localeCompare(
+        String(a.entry.created_at || "")
+      );
+    });
+    return out;
+  }
+
+  function formatDate(iso) {
+    if (!iso) return "";
+    var normalized =
+      String(iso).indexOf("T") >= 0
+        ? iso
+        : String(iso).replace(" ", "T") + "Z";
+    var d = new Date(normalized);
+    if (Number.isNaN(d.getTime())) return iso;
+    return d.toLocaleString("vi-VN", {
+      timeZone: "Asia/Ho_Chi_Minh",
+      dateStyle: "medium",
+      timeStyle: "short",
+    });
+  }
+
+  var S = {
+    transport: null,
+    fullData: [],
+    viewRows: [],
+    editingId: null,
+    editDraft: "",
+    saveBusy: null,
+    importBusy: false,
+    editBusy: false,
+    loading: false,
+    tagMenu: {
+      visible: false,
+      x: 0,
+      y: 0,
+      entryId: null,
+      phrase: "",
+    },
+  };
+
+  function applyLocalFilter() {
+    S.viewRows = buildViewRows(
+      S.fullData,
+      $("q").value,
+      $("tag").value
+    );
+    paintEntryList();
+    paintEmptyState();
+  }
+
+  function paintEmptyState() {
+    var elNone = $("empty-none");
+    var elNoMatch = $("empty-nomatch");
+    if (!elNone || !elNoMatch) return;
+    var loading = S.loading;
+    var hasData = S.fullData.length > 0;
+    var n = S.viewRows.length;
+    elNone.style.display =
+      !loading && n === 0 && !hasData ? "block" : "none";
+    elNoMatch.style.display =
+      !loading && n === 0 && hasData ? "block" : "none";
+  }
+
+  function setLoadError(msg) {
+    var el = $("load-error");
+    if (el) {
+      el.setAttribute("data-msg", msg || "");
+      el.textContent = msg || "";
+      el.style.display = msg ? "block" : "none";
+    }
+  }
+
+  function setRuntimeWarning(msg) {
+    var el = $("runtime-warning");
+    if (el) {
+      el.setAttribute("data-msg", msg || "");
+      el.textContent = msg || "";
+      el.style.display = msg ? "block" : "none";
+    }
+  }
+
+  function setSaveError(msg) {
+    var el = $("save-error");
+    if (el) {
+      el.setAttribute("data-msg", msg || "");
+      el.textContent = msg || "";
+      el.style.display = msg ? "block" : "none";
+    }
+  }
+
+  function setImportResult(msg) {
+    var el = $("import-result");
+    if (!el) return;
+    el.textContent = msg || "";
+    el.style.display = msg ? "block" : "none";
+  }
+
+  function syncSearchClear() {
+    var btn = $("search-clear");
+    var q = $("q");
+    if (!btn || !q) return;
+    btn.style.display = q.value.trim() ? "inline-flex" : "none";
+  }
+
+  function syncSaveButton() {
+    var btn = $("btn-save");
+    var ta = $("new-entry");
+    if (!btn || !ta) return;
+    var busy = S.saveBusy === "save";
+    btn.disabled = busy || !ta.value.trim();
+    btn.textContent = busy ? "Saving..." : "Save";
+  }
+
+  function syncImportButton() {
+    var btn = $("btn-import");
+    var ta = $("import-json");
+    if (!btn || !ta) return;
+    btn.disabled = S.importBusy || !ta.value.trim();
+    btn.textContent = S.importBusy ? "Importing..." : "Import Logs";
+  }
+
+  function paintCtxMenu() {
+    var menu = $("ctx-menu");
+    if (!menu) return;
+    if (!S.tagMenu.visible) {
+      menu.style.display = "none";
+      return;
+    }
+    menu.style.display = "block";
+    menu.style.left = S.tagMenu.x + "px";
+    menu.style.top = S.tagMenu.y + "px";
+  }
+
+  function closeTagMenu() {
+    S.tagMenu.visible = false;
+    paintCtxMenu();
+  }
+
+  function paintEntryList() {
+    var root = $("entry-list");
+    if (!root) return;
+    var parts = [];
+    var rows = S.viewRows;
+    var ei;
+    for (ei = 0; ei < rows.length; ei++) {
+      var item = rows[ei];
+      var e = item.entry;
+      var id = e.id;
+      var editing = S.editingId === id;
+      parts.push(
+        '<article class="entry" data-entry-id="' +
+          escapeAttr(String(id)) +
+          '">'
+      );
+      if (!editing) {
+        parts.push('<div class="entry-actions">');
+        parts.push(
+          '<button type="button" class="icon-btn" title="Edit" data-action="edit" data-id="' +
+            escapeAttr(String(id)) +
+            '">✎</button>'
+        );
+        parts.push(
+          '<button type="button" class="icon-btn danger" title="Delete" data-action="delete" data-id="' +
+            escapeAttr(String(id)) +
+            '">🗑</button>'
+        );
+        parts.push("</div>");
+      }
+      parts.push(
+        '<div class="entry-meta">' +
+          escapeHtml(formatDate(e.created_at)) +
+          "</div>"
+      );
+      if (!editing) {
+        if (e.summary) {
+          parts.push('<div class="summary">' + item.summaryHtml + "</div>");
+        }
+        if (item.tagSpans && item.tagSpans.length) {
+          parts.push('<div class="tags">');
+          var ti;
+          for (ti = 0; ti < item.tagSpans.length; ti++) {
+            var ts = item.tagSpans[ti];
+            parts.push('<span class="tag"><span>');
+            parts.push(ts.html);
+            parts.push(
+              '</span><button type="button" class="tag-remove" title="Remove tag" aria-label="Remove tag" data-action="remove-tag" data-id="' +
+                escapeAttr(String(id)) +
+                '" data-tag="' +
+                escapeAttr(String(ts.text)) +
+                '">x</button></span>'
+            );
+          }
+          parts.push("</div>");
+        }
+        if (e.sentiment) {
+          parts.push(
+            '<div class="sentiment">' + escapeHtml(e.sentiment) + "</div>"
+          );
+        }
+        parts.push('<div class="raw">' + item.rawHtml + "</div>");
+      } else {
+        parts.push('<div class="edit-box">');
+        parts.push(
+          '<textarea data-edit-field="1">' +
+            escapeHtml(S.editDraft) +
+            "</textarea>"
+        );
+        parts.push('<div class="btn-row">');
+        parts.push(
+          '<button type="button" data-action="save-edit" id="btn-save-edit" ' +
+            (S.editBusy || !S.editDraft.trim() ? "disabled" : "") +
+            ">" +
+            (S.editBusy ? "Saving..." : "Save Edit") +
+            "</button>"
+        );
+        parts.push(
+          '<button type="button" class="secondary" data-action="cancel-edit" ' +
+            (S.editBusy ? "disabled" : "") +
+            ">Cancel</button>"
+        );
+        parts.push("</div>");
+        parts.push(
+          '<p class="tiny-note">Edit updates raw text only unless you provide metadata via import JSON.</p>'
+        );
+        parts.push("</div>");
+      }
+      parts.push("</article>");
+    }
+    root.innerHTML = parts.join("");
+  }
+
+  function getEntryById(id) {
+    var target = Number(id);
+    var i;
+    for (i = 0; i < S.fullData.length; i++) {
+      if (Number(S.fullData[i].id) === target) return S.fullData[i];
+    }
+    return null;
+  }
+
+  async function loadEntries() {
+    if (!S.transport) {
+      S.fullData = [];
+      S.viewRows = [];
+      paintEntryList();
+      paintEmptyState();
+      return;
+    }
+    S.loading = true;
+    setLoadError("");
+    try {
+      var list = await S.transport.list();
+      S.fullData = (list || []).map(enrichEntry);
+      applyLocalFilter();
+    } catch (err) {
+      setLoadError((err && err.message) || "Failed to load entries");
+      S.fullData = [];
+      S.viewRows = [];
+      paintEntryList();
+      paintEmptyState();
+    } finally {
+      S.loading = false;
+      paintEmptyState();
+    }
+  }
+
+  function onAppClick(ev) {
+    var t = ev.target;
+    if (t.closest && t.closest("#ctx-menu")) {
+      return;
+    }
+    closeTagMenu();
+  }
+
+  function onEntryListClick(ev) {
+    var btn = ev.target.closest("[data-action]");
+    if (!btn) return;
+    var action = btn.getAttribute("data-action");
+    var id = btn.getAttribute("data-id");
+    if (action === "edit") {
+      var ent = getEntryById(id);
+      if (ent) {
+        S.editingId = ent.id;
+        S.editDraft = ent.raw_text || "";
+        paintEntryList();
+      }
+      return;
+    }
+    if (action === "delete") {
+      void deleteEntry(id);
+      return;
+    }
+    if (action === "remove-tag") {
+      var tag = btn.getAttribute("data-tag");
+      var e2 = getEntryById(id);
+      if (e2) void removeTag(e2, tag);
+      return;
+    }
+    if (action === "save-edit") {
+      void updateEntry();
+      return;
+    }
+    if (action === "cancel-edit") {
+      S.editingId = null;
+      S.editDraft = "";
+      paintEntryList();
+      return;
+    }
+  }
+
+  function onEntryListInput(ev) {
+    if (ev.target.getAttribute("data-edit-field")) {
+      S.editDraft = ev.target.value;
+      var b = $("btn-save-edit");
+      if (b) b.disabled = S.editBusy || !S.editDraft.trim();
+    }
+  }
+
+  function onEntryContextMenu(ev) {
+    var art = ev.target.closest("[data-entry-id]");
+    if (!art) return;
+    var id = art.getAttribute("data-entry-id");
+    var sel = window.getSelection && window.getSelection();
+    var phrase = (sel ? sel.toString() : "").trim();
+    if (!phrase) return;
+    ev.preventDefault();
+    var ent = getEntryById(id);
+    if (!ent) return;
+    S.tagMenu = {
+      visible: true,
+      x: Math.min(ev.clientX, window.innerWidth - 210),
+      y: Math.min(ev.clientY, window.innerHeight - 60),
+      entryId: ent.id,
+      phrase: phrase,
+    };
+    paintCtxMenu();
+  }
+
+  async function saveEntry() {
+    var ta = $("new-entry");
+    if (!ta || !S.transport) return;
+    var raw_text = ta.value.trim();
+    if (!raw_text) return;
+    S.saveBusy = "save";
+    setSaveError("");
+    syncSaveButton();
+    try {
+      await S.transport.create({ raw_text: raw_text });
+      ta.value = "";
+      await loadEntries();
+    } catch (err) {
+      setSaveError((err && err.message) || "Save failed");
+    } finally {
+      S.saveBusy = null;
+      syncSaveButton();
+    }
+  }
+
+  async function updateEntry() {
+    if (!S.editingId || !S.editDraft.trim() || !S.transport) return;
+    S.editBusy = true;
+    paintEntryList();
+    setSaveError("");
+    try {
+      await S.transport.update({
+        id: S.editingId,
+        raw_text: S.editDraft.trim(),
+      });
+      S.editingId = null;
+      S.editDraft = "";
+      await loadEntries();
+    } catch (err) {
+      setSaveError((err && err.message) || "Update failed");
+    } finally {
+      S.editBusy = false;
+      paintEntryList();
+    }
+  }
+
+  async function importLogs() {
+    var ta = $("import-json");
+    if (!ta || !S.transport) return;
+    if (!ta.value.trim()) return;
+    S.importBusy = true;
+    setImportResult("");
+    setSaveError("");
+    syncImportButton();
+    try {
+      var parsed = JSON.parse(ta.value);
+      var logs = Array.isArray(parsed) ? parsed : parsed.logs;
+      if (!Array.isArray(logs) || !logs.length) {
+        throw new Error("Invalid import JSON");
+      }
+      var data = await S.transport.importLogs({ logs: logs });
+      setImportResult(
+        "Imported " +
+          data.imported_count +
+          " logs. Errors: " +
+          data.error_count +
+          "."
+      );
+      await loadEntries();
+    } catch (err) {
+      setImportResult("");
+      setSaveError((err && err.message) || "Import failed");
+    } finally {
+      S.importBusy = false;
+      syncImportButton();
+    }
+  }
+
+  async function deleteEntry(id) {
+    if (!S.transport) return;
+    setSaveError("");
+    try {
+      await S.transport.remove({ id: id });
+      if (S.editingId === Number(id) || String(S.editingId) === String(id)) {
+        S.editingId = null;
+        S.editDraft = "";
+      }
+      await loadEntries();
+    } catch (err) {
+      setSaveError((err && err.message) || "Delete failed");
+    }
+  }
+
+  async function removeTag(entry, tagToRemove) {
+    if (!S.transport) return;
+    var nextTags = (entry.tags || []).filter(function (t) {
+      return t !== tagToRemove;
+    });
+    setSaveError("");
+    try {
+      await S.transport.update({
+        id: entry.id,
+        raw_text: entry.raw_text || "",
+        tags: nextTags,
+      });
+      await loadEntries();
+    } catch (err) {
+      setSaveError((err && err.message) || "Remove tag failed");
+    }
+  }
+
+  async function addSelectionAsTag() {
+    if (!S.tagMenu.entryId || !S.tagMenu.phrase || !S.transport) {
+      closeTagMenu();
+      return;
+    }
+    try {
+      await S.transport.appendTag({
+        id: S.tagMenu.entryId,
+        tag: S.tagMenu.phrase,
+      });
+      await loadEntries();
+    } catch (err) {
+      setSaveError((err && err.message) || "Add tag failed");
+    } finally {
+      closeTagMenu();
+    }
+  }
+
+  function clearSearch() {
+    var q = $("q");
+    if (q) q.value = "";
+    syncSearchClear();
+    applyLocalFilter();
+    if (q) q.focus();
+  }
+
+  function bind() {
+    var app = $("app");
+    if (app) {
+      app.addEventListener("click", onAppClick);
+    }
+    var list = $("entry-list");
+    if (list) {
+      list.addEventListener("click", onEntryListClick);
+      list.addEventListener("input", onEntryListInput);
+      list.addEventListener("contextmenu", onEntryContextMenu);
+    }
+    var q = $("q");
+    var tag = $("tag");
+    if (q) {
+      q.addEventListener("input", function () {
+        syncSearchClear();
+        applyLocalFilter();
+      });
+    }
+    if (tag) {
+      tag.addEventListener("input", applyLocalFilter);
+    }
+    var sc = $("search-clear");
+    if (sc) sc.addEventListener("click", clearSearch);
+    var bs = $("btn-save");
+    if (bs) bs.addEventListener("click", function () { void saveEntry(); });
+    var ne = $("new-entry");
+    if (ne) {
+      ne.addEventListener("input", syncSaveButton);
+    }
+    var bi = $("btn-import");
+    var ij = $("import-json");
+    if (bi) bi.addEventListener("click", function () { void importLogs(); });
+    if (ij) ij.addEventListener("input", syncImportButton);
+    var ctx = $("ctx-menu");
+    if (ctx) {
+      ctx.addEventListener("click", function (e) {
+        e.stopPropagation();
+      });
+    }
+    var ctxBtn = $("ctx-add-tag");
+    if (ctxBtn) {
+      ctxBtn.addEventListener("click", function (e) {
+        e.stopPropagation();
+        void addSelectionAsTag();
+      });
+    }
+    window.addEventListener("scroll", closeTagMenu, true);
+    window.addEventListener("resize", closeTagMenu);
+  }
+
+  function init() {
+    bind();
+    if (
+      typeof window !== "undefined" &&
+      window.location.protocol === "file:"
+    ) {
+      setRuntimeWarning(
+        "Do not open this page as file://. Serve it over http (e.g. npx serve) — otherwise the browser blocks requests to Google Apps Script."
+      );
+    } else {
+      setRuntimeWarning("");
+    }
+
+    var DT = window.DiaryTransport;
+    if (!DT || typeof DT.createAppsScriptRunTransport !== "function") {
+      setLoadError(
+        "Missing window.DiaryTransport: keep the inline script in Index.html in sync with DiaryTransport.inline.html."
+      );
+      return;
+    }
+    if (isGasHosted()) {
+      S.transport = DT.createAppsScriptRunTransport();
+    } else {
+      var base = getAppScriptBaseUrl();
+      if (!base) {
+        setLoadError(
+          "Set APPS_SCRIPT_URL in window.DIARY_APP_CONFIG (or open this UI from the Apps Script Web App)."
+        );
+        return;
+      }
+      S.transport = DT.createHttpTransport(base);
+    }
+    syncSaveButton();
+    syncImportButton();
+    syncSearchClear();
+    void loadEntries();
+  }
+
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", init);
+  } else {
+    init();
+  }
+})();
+</script>
