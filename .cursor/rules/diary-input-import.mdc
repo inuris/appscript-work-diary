@@ -1,0 +1,36 @@
+---
+description: Manual diary processing trigger and import schema
+alwaysApply: true
+---
+
+# Diary Input Trigger
+
+When the user message starts with `diary input`, convert the provided text into structured logs for the diary app import flow.
+
+## Required Output Format
+
+Return ONLY valid JSON (no markdown fences, no prose):
+
+```json
+{
+  "logs": [
+    {
+      "created_at": "YYYY-MM-DD HH:MM:SS",
+      "raw_text": "original diary text",
+      "summary": "1-2 concise sentences",
+      "tags": ["lowercase-tag-1", "lowercase-tag-2"],
+      "sentiment": "Positive|Negative|Neutral"
+    }
+  ]
+}
+```
+
+## Constraints
+
+- `raw_text` is required and should preserve user meaning.
+- `summary` should be concise and factual.
+- `tags` should be lowercase, deduplicated, and max 12 per log.
+- `sentiment` must be exactly one of `Positive`, `Negative`, `Neutral`.
+- `created_at` is optional; if unknown, still keep key with best estimate in local time.
+- If multiple diary moments exist, split into multiple objects in `logs`.
+- Do not add extra keys outside this schema.
