@@ -87,20 +87,20 @@
 
       <div id="bulk-bar" class="bulk-bar panel" style="display: none">
         <label class="bulk-select-all"
-          ><input type="checkbox" id="bulk-select-all" /> Select all shown</label
+          ><input type="checkbox" id="bulk-select-all" /> All shown</label
         >
-        <span id="bulk-selected-label" class="bulk-muted">None selected</span>
+        <span id="bulk-selected-label" class="bulk-muted"></span>
         <div class="bulk-actions">
           <input
             type="text"
             id="bulk-tag-input"
-            placeholder="Tag to add to selected…"
+            placeholder="Tag…"
           />
-          <button type="button" id="bulk-add-tag-btn" class="secondary">
+          <button type="button" id="bulk-add-tag-btn" class="secondary bulk-action-btn">
             Add tag
           </button>
-          <button type="button" id="bulk-delete-btn" class="secondary bulk-delete-btn">
-            Delete selected
+          <button type="button" id="bulk-delete-btn" class="secondary bulk-delete-btn bulk-action-btn">
+            Delete
           </button>
         </div>
       </div>

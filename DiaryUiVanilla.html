@@ -294,21 +294,6 @@
     return out;
   }
 
-  function formatDate(iso) {
-    if (!iso) return "";
-    var normalized =
-      String(iso).indexOf("T") >= 0
-        ? iso
-        : String(iso).replace(" ", "T") + "Z";
-    var d = new Date(normalized);
-    if (Number.isNaN(d.getTime())) return iso;
-    return d.toLocaleString("vi-VN", {
-      timeZone: "Asia/Ho_Chi_Minh",
-      dateStyle: "medium",
-      timeStyle: "short",
-    });
-  }
-
   function rebuildTagCatalog() {
     var counts = {};
     var i;
@@ -514,7 +499,10 @@
     var label = $("bulk-selected-label");
     var ids = getSelectedIdsArray();
     if (label) {
-      label.textContent = ids.length ? ids.length + " selected" : "None selected";
+      label.textContent = ids.length ? String(ids.length) : "—";
+      label.title = ids.length
+        ? ids.length + " selected"
+        : "None selected";
     }
     var allCb = $("bulk-select-all");
     if (allCb) {
@@ -761,15 +749,6 @@
       parts.push(
         '<article class="entry" data-entry-id="' + escapeAttr(idStr) + '">'
       );
-      if (!editing) {
-        parts.push(
-          '<label class="entry-select-wrap" title="Select for bulk delete or tag"><input type="checkbox" data-entry-select data-id="' +
-            escapeAttr(idStr) +
-            '"' +
-            (S.selectedIds[idStr] ? " checked" : "") +
-            "></label>"
-        );
-      }
       parts.push('<div class="entry-main">');
       if (!editing) {
         parts.push('<div class="entry-actions">');
@@ -783,12 +762,15 @@
             escapeAttr(idStr) +
             '">🗑</button>'
         );
-        parts.push("</div>");
         parts.push(
-          '<div class="entry-meta">' +
-            escapeHtml(formatDate(e.created_at)) +
-            "</div>"
+          '<label class="entry-select-wrap" title="Select for bulk delete or tag"><input type="checkbox" data-entry-select data-id="' +
+            escapeAttr(idStr) +
+            '"' +
+            (S.selectedIds[idStr] ? " checked" : "") +
+            "></label>"
         );
+        parts.push("</div>");
+        parts.push('<div class="entry-body">' + item.rawHtml + "</div>");
         if (e.summary) {
           parts.push(
             '<div class="entry-title-line">' + item.summaryHtml + "</div>"
@@ -798,7 +780,6 @@
             '<div class="entry-title-line untitled">Untitled</div>'
           );
         }
-        parts.push('<div class="entry-body">' + item.rawHtml + "</div>");
         if (item.tagSpans && item.tagSpans.length) {
           parts.push('<div class="tags">');
           var ti;
@@ -815,11 +796,6 @@
             );
           }
           parts.push("</div>");
-        }
-        if (e.sentiment) {
-          parts.push(
-            '<div class="sentiment">' + escapeHtml(e.sentiment) + "</div>"
-          );
         }
       } else {
         parts.push('<div class="edit-box">');
