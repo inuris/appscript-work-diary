@@ -38,6 +38,10 @@ In **`WebAppHost.gs`**, set `APP_CONFIG.SS_ID` and `APP_CONFIG.SHEET_GID`.
 
 Sheet row 1: `id`, `created_at`, `raw_text`, `summary`, `tags`, `sentiment`.
 
+## Local preview (no Apps Script)
+
+From the repo root, **`npm run preview`** (or `node dev/local-preview-server.js`) starts **`http://127.0.0.1:3333/`**. It assembles `Index.html` the same way HtmlService does (`include` for styles + UI, injects `DIARY_APP_CONFIG.APPS_SCRIPT_URL` pointing at the same origin) and serves a **POST/GET API** matching `WebAppHost.gs` (`?action=list` and JSON `{ action, payload }`). Data is stored in **`dev/local-diary-data.json`** (gitignored). Change the port with **`PORT`** (e.g. bash: `PORT=4000 npm run preview`; PowerShell: `$env:PORT=4000; npm run preview`).
+
 ## Deploy
 
 1. **Deploy → New deployment** → **Web app**.

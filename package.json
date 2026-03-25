@@ -1,0 +1,8 @@
+{
+  "name": "appscript-work-diary",
+  "private": true,
+  "description": "Diary UI + Apps Script backend; use npm run preview for local HtmlService-equivalent preview.",
+  "scripts": {
+    "preview": "node dev/local-preview-server.js"
+  }
+}
