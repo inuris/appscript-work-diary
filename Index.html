@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- Index.html — HtmlService template: shell + inline DiaryTransport + DiaryUiVanilla (no Vue). -->
+<!-- Index.html — HtmlService: sidebar (new entry + import) + main (search & results first). -->
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
@@ -14,79 +14,135 @@
     };
   </script>
 
-  <div id="app">
-    <h1>Diary</h1>
-    <p id="runtime-warning" class="err" style="display: none"></p>
-
-    <section class="panel">
-      <label for="new-entry">New entry</label>
-      <textarea id="new-entry" placeholder="Write your thoughts..."></textarea>
+  <div id="app" class="app-shell">
+    <aside class="sidebar panel">
+      <h2 class="sidebar-heading">New entry</h2>
+      <label for="entry-title">Title</label>
+      <input id="entry-title" type="text" placeholder="Short title" />
+      <label for="entry-desc">Description</label>
+      <textarea id="entry-desc" class="sidebar-textarea" placeholder="Body text…"></textarea>
+      <div class="tags-field-wrap">
+        <label for="entry-tags" title="Comma-separated. Suggestions show most-used tags first.">Tags</label>
+        <input
+          id="entry-tags"
+          type="text"
+          placeholder="e.g. work, health"
+          list="tag-datalist"
+          autocomplete="off"
+        />
+        <datalist id="tag-datalist"></datalist>
+        <div id="tag-suggest-panel" class="tag-suggest-panel" hidden></div>
+      </div>
       <div class="btn-row">
         <button type="button" id="btn-save" disabled>Save</button>
       </div>
       <p id="save-error" class="err" style="display: none"></p>
 
-      <div class="note-block">
-        <p>Manual AI trigger for Cursor (keyword: <strong>diary input</strong>)</p>
-<pre>diary input
-Convert the text below into JSON for diary import.
-Return ONLY valid JSON in this schema:
-{
-  "logs": [
-    {
-      "created_at": "YYYY-MM-DD HH:MM:SS",
-      "raw_text": "original diary text",
-      "summary": "1-2 concise sentences",
-      "tags": ["tag1", "tag2"],
-      "sentiment": "Positive|Negative|Neutral"
-    }
-  ]
-}
-Rules: keep tags lowercase; max 12 tags per log; do not include markdown fences.</pre>
+      <div class="sidebar-section import-block">
+        <label for="import-json" class="label-tip">
+          Import JSON
+          <span
+            class="tip-icon"
+            tabindex="0"
+            role="tooltip"
+            title="In Cursor, start a message with the keyword &quot;diary input&quot; so the AI returns import JSON (logs). Paste the result here — no need to edit the shape by hand."
+            >?</span
+          >
+        </label>
+        <textarea
+          id="import-json"
+          class="import-textarea"
+          placeholder="Paste JSON from AI (diary)" 
+          rows="5"
+        ></textarea>
+        <div class="btn-row">
+          <button type="button" id="btn-import" disabled>Import</button>
+        </div>
       </div>
-    </section>
+    </aside>
 
-    <section class="panel">
-      <label for="import-json">Import multi logs (JSON)</label>
-      <textarea id="import-json" placeholder='{"logs":[{"raw_text":"...","summary":"...","tags":["..."],"sentiment":"Neutral"}]}'></textarea>
-      <div class="btn-row">
-        <button type="button" id="btn-import" disabled>Import Logs</button>
-      </div>
-      <p id="import-result" class="tiny-note" style="display: none"></p>
-    </section>
+    <main class="main-pane">
+      <h1 class="main-title">Diary</h1>
+      <p id="runtime-warning" class="err" style="display: none"></p>
 
-    <section class="panel filters">
-      <div class="row">
-        <div>
-          <label for="q">Search</label>
-          <div class="search-wrap">
-            <input id="q" type="search" placeholder="Keyword..." />
-            <button id="search-clear" class="search-clear" type="button" style="display: none" aria-label="Clear search">x</button>
+      <section class="panel search-panel">
+        <div class="row">
+          <div>
+            <label for="q">Search</label>
+            <div class="search-wrap">
+              <input id="q" type="search" placeholder="Keyword…" />
+              <button id="search-clear" class="search-clear" type="button" style="display: none" aria-label="Clear search">×</button>
+            </div>
+          </div>
+          <div>
+            <label for="tag">Filter by tag</label>
+            <input id="tag" type="text" placeholder="Exact tag…" />
           </div>
         </div>
-        <div>
-          <label for="tag">Tag</label>
-          <input id="tag" type="text" placeholder="Filter by tag..." />
+      </section>
+
+      <p id="load-error" class="err" style="display: none"></p>
+      <p id="empty-none" class="empty" style="display: none">No entries yet.</p>
+      <p id="empty-nomatch" class="empty" style="display: none">No matching entries.</p>
+
+      <div id="bulk-bar" class="bulk-bar panel" style="display: none">
+        <label class="bulk-select-all"
+          ><input type="checkbox" id="bulk-select-all" /> Select all shown</label
+        >
+        <span id="bulk-selected-label" class="bulk-muted">None selected</span>
+        <div class="bulk-actions">
+          <input
+            type="text"
+            id="bulk-tag-input"
+            placeholder="Tag to add to selected…"
+          />
+          <button type="button" id="bulk-add-tag-btn" class="secondary">
+            Add tag
+          </button>
+          <button type="button" id="bulk-delete-btn" class="secondary bulk-delete-btn">
+            Delete selected
+          </button>
         </div>
       </div>
-    </section>
 
-    <p id="load-error" class="err" style="display: none"></p>
-    <p id="empty-none" class="empty" style="display: none">No entries yet.</p>
-    <p id="empty-nomatch" class="empty" style="display: none">No matching entries.</p>
+      <div id="entry-list" class="entry-list-scroll"></div>
 
-    <div id="entry-list"></div>
+      <div
+        id="ctx-menu"
+        class="ctx-menu"
+        style="display: none; position: fixed; z-index: 1000"
+      >
+        <button type="button" id="ctx-add-tag">Add selection as tag</button>
+      </div>
+    </main>
+  </div>
 
-    <div
-      id="ctx-menu"
-      class="ctx-menu"
-      style="display: none; position: fixed; z-index: 1000"
-    >
-      <button type="button" id="ctx-add-tag">Add selection as tag</button>
+  <div
+    id="sync-indicator"
+    class="sync-indicator"
+    hidden
+    title="Talking to server…"
+    aria-live="polite"
+  >
+    <span class="sync-spinner" aria-hidden="true"></span>
+  </div>
+
+  <div
+    id="import-modal"
+    class="modal-root"
+    hidden
+    aria-hidden="true"
+  >
+    <div class="modal-backdrop" data-close-modal></div>
+    <div class="modal-dialog panel" role="dialog" aria-labelledby="import-modal-title">
+      <h2 id="import-modal-title" class="modal-title">Import results</h2>
+      <div id="import-modal-body"></div>
+      <div class="btn-row modal-actions">
+        <button type="button" class="secondary" data-close-modal>Close</button>
+      </div>
     </div>
   </div>
 
-  <!-- window.DiaryTransport: must stay identical to DiaryTransport.inline.html (HtmlService skips scripts in include() files). -->
   <script>
   window.DiaryTransport = (function () {
     function run(funcName, payload) {

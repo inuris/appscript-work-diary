@@ -1,7 +1,4 @@
-<!--
-  DiaryUiVanilla.html — no Vue; plain DOM + one list paint per filter (fast typing).
-  Same search/match logic as before; load <?!= include('DiaryUiVanilla'); ?> from Index.html after DiaryTransport.
--->
+<!-- DiaryUiVanilla — layout: sidebar (new entry + import) / main (search + list). -->
 <script>
 (function () {
   function $(id) {
@@ -31,6 +28,26 @@
     }
     if (!Array.isArray(out.tags)) out.tags = [];
     return out;
+  }
+
+  function parseTagsFromInput(s) {
+    if (!s || !String(s).trim()) return [];
+    var seen = {};
+    var out = [];
+    String(s)
+      .split(",")
+      .map(function (x) {
+        return x.trim().toLowerCase().replace(/\s+/g, " ");
+      })
+      .filter(Boolean)
+      .forEach(function (t) {
+        if (t.length > 40) t = t.slice(0, 40);
+        if (!seen[t]) {
+          seen[t] = true;
+          out.push(t);
+        }
+      });
+    return out.slice(0, 12);
   }
 
   function trimAccent(phrase) {
@@ -280,15 +297,350 @@
     });
   }
 
+  function rebuildTagCatalog() {
+    var counts = {};
+    var i;
+    for (i = 0; i < S.fullData.length; i++) {
+      var tags = S.fullData[i].tags || [];
+      var t;
+      for (t = 0; t < tags.length; t++) {
+        var k = String(tags[t]).trim().toLowerCase();
+        if (!k) continue;
+        counts[k] = (counts[k] || 0) + 1;
+      }
+    }
+    var pairs = Object.keys(counts).map(function (k) {
+      return { tag: k, count: counts[k] };
+    });
+    pairs.sort(function (a, b) {
+      if (b.count !== a.count) return b.count - a.count;
+      return a.tag.localeCompare(b.tag);
+    });
+    S.tagCatalog = pairs;
+    var dl = $("tag-datalist");
+    if (dl) {
+      dl.innerHTML = pairs
+        .map(function (p) {
+          return "<option value=\"" + escapeAttr(p.tag) + "\"></option>";
+        })
+        .join("");
+    }
+  }
+
+  function getTagPrefixForSuggest(el) {
+    var v = el.value;
+    var end = el.selectionStart != null ? el.selectionStart : v.length;
+    var before = v.slice(0, end);
+    var lc = before.lastIndexOf(",");
+    var frag = (lc < 0 ? before : before.slice(lc + 1)).trim().toLowerCase();
+    return frag;
+  }
+
+  function renderTagSuggest() {
+    var el = $("entry-tags");
+    var panel = $("tag-suggest-panel");
+    if (!el || !panel) return;
+    if (document.activeElement !== el) {
+      panel.hidden = true;
+      panel.innerHTML = "";
+      return;
+    }
+    var frag = getTagPrefixForSuggest(el);
+    var list = S.tagCatalog.filter(function (p) {
+      return !frag || p.tag.indexOf(frag) === 0;
+    }).slice(0, 12);
+    if (!list.length) {
+      panel.hidden = true;
+      panel.innerHTML = "";
+      return;
+    }
+    panel.innerHTML = list
+      .map(function (p) {
+        return (
+          '<button type="button" class="tag-suggest-item" data-suggest-tag="' +
+          escapeAttr(p.tag) +
+          '"><span>' +
+          escapeHtml(p.tag) +
+          '</span><span class="tag-suggest-count">' +
+          p.count +
+          "</span></button>"
+        );
+      })
+      .join("");
+    panel.hidden = false;
+  }
+
+  function insertTagSuggestion(tag) {
+    var el = $("entry-tags");
+    if (!el) return;
+    var lower = tag.toLowerCase();
+    var existing = parseTagsFromInput(el.value);
+    if (existing.indexOf(lower) >= 0) return;
+    var v = el.value.replace(/\s+$/, "");
+    el.value = (v ? v + ", " : "") + tag;
+    el.focus();
+    renderTagSuggest();
+  }
+
+  function openImportModal(data) {
+    var root = $("import-modal");
+    var body = $("import-modal-body");
+    if (!root || !body) return;
+    var totalTry =
+      (data.imported_count || 0) + (data.error_count || 0);
+    var rows = [
+      ["Rows processed", String(totalTry)],
+      ["Imported OK", String(data.imported_count != null ? data.imported_count : "—")],
+      ["Failed", String(data.error_count != null ? data.error_count : "—")],
+    ];
+    var html =
+      '<table class="stats-table"><thead><tr><th>Metric</th><th>Value</th></tr></thead><tbody>';
+    var r;
+    for (r = 0; r < rows.length; r++) {
+      html +=
+        "<tr><td>" +
+        escapeHtml(rows[r][0]) +
+        "</td><td>" +
+        escapeHtml(rows[r][1]) +
+        "</td></tr>";
+    }
+    html += "</tbody></table>";
+    if (data.imported_ids && data.imported_ids.length) {
+      var ids = data.imported_ids.slice(0, 50);
+      html +=
+        '<p class="stats-table-note">New entry IDs (up to 50): ' +
+        escapeHtml(ids.join(", ")) +
+        "</p>";
+      if (data.imported_ids.length > 50) {
+        html +=
+          '<p class="stats-table-note">…and ' +
+          (data.imported_ids.length - 50) +
+          " more.</p>";
+      }
+    }
+    if (data.errors && data.errors.length) {
+      html +=
+        '<h3 class="modal-subhead">Error detail</h3><table class="stats-table"><thead><tr><th>Log #</th><th>Message</th></tr></thead><tbody>';
+      var ei;
+      for (ei = 0; ei < data.errors.length; ei++) {
+        var er = data.errors[ei];
+        html +=
+          "<tr><td>" +
+          escapeHtml(String(er.index)) +
+          "</td><td>" +
+          escapeHtml(String(er.error || "")) +
+          "</td></tr>";
+      }
+      html += "</tbody></table>";
+    }
+    body.innerHTML = html;
+    root.hidden = false;
+    root.setAttribute("aria-hidden", "false");
+  }
+
+  function closeImportModal() {
+    var root = $("import-modal");
+    if (!root) return;
+    root.hidden = true;
+    root.setAttribute("aria-hidden", "true");
+  }
+
+  function beginSync() {
+    S.syncDepth++;
+    var el = $("sync-indicator");
+    if (el) el.hidden = false;
+  }
+
+  function endSync() {
+    S.syncDepth = Math.max(0, S.syncDepth - 1);
+    if (S.syncDepth === 0) {
+      var ind = $("sync-indicator");
+      if (ind) ind.hidden = true;
+    }
+  }
+
+  function pruneSelectedIds() {
+    var keep = Object.create(null);
+    var i;
+    for (i = 0; i < S.fullData.length; i++) {
+      keep[String(S.fullData[i].id)] = true;
+    }
+    var next = Object.create(null);
+    Object.keys(S.selectedIds).forEach(function (k) {
+      if (keep[k]) next[k] = true;
+    });
+    S.selectedIds = next;
+  }
+
+  function getSelectedIdsArray() {
+    return Object.keys(S.selectedIds)
+      .filter(function (k) {
+        return S.selectedIds[k];
+      })
+      .map(function (k) {
+        return Number(k);
+      })
+      .filter(function (n) {
+        return !isNaN(n);
+      });
+  }
+
+  function normalizeBulkTag(s) {
+    var t = String(s || "")
+      .trim()
+      .toLowerCase()
+      .replace(/\s+/g, " ");
+    if (t.length > 40) t = t.slice(0, 40);
+    return t;
+  }
+
+  function paintBulkBar() {
+    var bar = $("bulk-bar");
+    if (!bar) return;
+    var nShown = S.viewRows.length;
+    bar.style.display = nShown > 0 ? "block" : "none";
+    var label = $("bulk-selected-label");
+    var ids = getSelectedIdsArray();
+    if (label) {
+      label.textContent = ids.length ? ids.length + " selected" : "None selected";
+    }
+    var allCb = $("bulk-select-all");
+    if (allCb) {
+      if (nShown === 0) {
+        allCb.checked = false;
+        allCb.indeterminate = false;
+      } else {
+        var idStrs = S.viewRows.map(function (r) {
+          return String(r.entry.id);
+        });
+        var allOn = idStrs.every(function (id) {
+          return S.selectedIds[id];
+        });
+        var someOn = idStrs.some(function (id) {
+          return S.selectedIds[id];
+        });
+        allCb.checked = allOn;
+        allCb.indeterminate = someOn && !allOn;
+      }
+    }
+    var dis = ids.length === 0;
+    var addB = $("bulk-add-tag-btn");
+    var delB = $("bulk-delete-btn");
+    if (addB) addB.disabled = dis;
+    if (delB) delB.disabled = dis;
+  }
+
+  function onEntryListChange(ev) {
+    var t = ev.target;
+    if (!t || !t.hasAttribute("data-entry-select")) return;
+    var id = t.getAttribute("data-id");
+    if (t.checked) S.selectedIds[id] = true;
+    else delete S.selectedIds[id];
+    paintBulkBar();
+    var allCb = $("bulk-select-all");
+    var nShown = S.viewRows.length;
+    if (allCb && nShown > 0) {
+      var idStrs = S.viewRows.map(function (r) {
+        return String(r.entry.id);
+      });
+      var allOn = idStrs.length && idStrs.every(function (x) {
+        return S.selectedIds[x];
+      });
+      var someOn = idStrs.some(function (x) {
+        return S.selectedIds[x];
+      });
+      allCb.checked = allOn;
+      allCb.indeterminate = someOn && !allOn;
+    }
+  }
+
+  function onBulkSelectAllChange(ev) {
+    var cb = ev.target;
+    var on = cb.checked;
+    S.viewRows.forEach(function (row) {
+      var id = String(row.entry.id);
+      if (on) S.selectedIds[id] = true;
+      else delete S.selectedIds[id];
+    });
+    paintEntryList();
+  }
+
+  function bulkDeleteSelected() {
+    var ids = getSelectedIdsArray();
+    if (!ids.length || !S.transport) return;
+    if (!confirm("Delete " + ids.length + " entries? This cannot be undone.")) return;
+    beginSync();
+    setSaveError("");
+    (function () {
+      return ids
+        .reduce(function (chain, id) {
+          return chain.then(function () {
+            return S.transport.remove({ id: id });
+          });
+        }, Promise.resolve())
+        .then(function () {
+          S.selectedIds = {};
+          S.editingId = null;
+          S.editDraft = "";
+          S.editTitle = "";
+          S.editTags = "";
+          return loadEntries();
+        })
+        .catch(function (err) {
+          setSaveError((err && err.message) || "Bulk delete failed");
+          return loadEntries();
+        })
+        .finally(endSync);
+    })();
+  }
+
+  function bulkAddTagToSelected() {
+    var ids = getSelectedIdsArray();
+    var inp = $("bulk-tag-input");
+    var tag = inp ? normalizeBulkTag(inp.value) : "";
+    if (!ids.length || !tag || !S.transport) return;
+    if (
+      !confirm(
+        'Add tag "' + tag + '" to ' + ids.length + " selected entries?"
+      )
+    ) {
+      return;
+    }
+    beginSync();
+    setSaveError("");
+    (function () {
+      return ids
+        .reduce(function (chain, id) {
+          return chain.then(function () {
+            return S.transport.appendTag({ id: id, tag: tag });
+          });
+        }, Promise.resolve())
+        .then(function () {
+          if (inp) inp.value = "";
+          return loadEntries();
+        })
+        .catch(function (err) {
+          setSaveError((err && err.message) || "Bulk add tag failed");
+          return loadEntries();
+        })
+        .finally(endSync);
+    })();
+  }
+
   var S = {
     transport: null,
     fullData: [],
     viewRows: [],
+    tagCatalog: [],
+    selectedIds: {},
+    syncDepth: 0,
+    saveInFlight: false,
+    importInFlight: false,
+    editInFlight: false,
     editingId: null,
     editDraft: "",
-    saveBusy: null,
-    importBusy: false,
-    editBusy: false,
+    editTitle: "",
+    editTags: "",
     loading: false,
     tagMenu: {
       visible: false,
@@ -300,11 +652,7 @@
   };
 
   function applyLocalFilter() {
-    S.viewRows = buildViewRows(
-      S.fullData,
-      $("q").value,
-      $("tag").value
-    );
+    S.viewRows = buildViewRows(S.fullData, $("q").value, $("tag").value);
     paintEntryList();
     paintEmptyState();
   }
@@ -325,7 +673,6 @@
   function setLoadError(msg) {
     var el = $("load-error");
     if (el) {
-      el.setAttribute("data-msg", msg || "");
       el.textContent = msg || "";
       el.style.display = msg ? "block" : "none";
     }
@@ -334,7 +681,6 @@
   function setRuntimeWarning(msg) {
     var el = $("runtime-warning");
     if (el) {
-      el.setAttribute("data-msg", msg || "");
       el.textContent = msg || "";
       el.style.display = msg ? "block" : "none";
     }
@@ -343,17 +689,9 @@
   function setSaveError(msg) {
     var el = $("save-error");
     if (el) {
-      el.setAttribute("data-msg", msg || "");
       el.textContent = msg || "";
       el.style.display = msg ? "block" : "none";
     }
-  }
-
-  function setImportResult(msg) {
-    var el = $("import-result");
-    if (!el) return;
-    el.textContent = msg || "";
-    el.style.display = msg ? "block" : "none";
   }
 
   function syncSearchClear() {
@@ -365,19 +703,18 @@
 
   function syncSaveButton() {
     var btn = $("btn-save");
-    var ta = $("new-entry");
-    if (!btn || !ta) return;
-    var busy = S.saveBusy === "save";
-    btn.disabled = busy || !ta.value.trim();
-    btn.textContent = busy ? "Saving..." : "Save";
+    var desc = $("entry-desc");
+    if (!btn || !desc) return;
+    btn.disabled = !desc.value.trim() || S.saveInFlight;
+    btn.textContent = "Save";
   }
 
   function syncImportButton() {
     var btn = $("btn-import");
     var ta = $("import-json");
     if (!btn || !ta) return;
-    btn.disabled = S.importBusy || !ta.value.trim();
-    btn.textContent = S.importBusy ? "Importing..." : "Import Logs";
+    btn.disabled = S.importInFlight || !ta.value.trim();
+    btn.textContent = "Import";
   }
 
   function paintCtxMenu() {
@@ -407,35 +744,49 @@
       var item = rows[ei];
       var e = item.entry;
       var id = e.id;
+      var idStr = String(id);
       var editing = S.editingId === id;
       parts.push(
-        '<article class="entry" data-entry-id="' +
-          escapeAttr(String(id)) +
-          '">'
+        '<article class="entry" data-entry-id="' + escapeAttr(idStr) + '">'
       );
+      if (!editing) {
+        parts.push(
+          '<label class="entry-select-wrap" title="Select for bulk delete or tag"><input type="checkbox" data-entry-select data-id="' +
+            escapeAttr(idStr) +
+            '"' +
+            (S.selectedIds[idStr] ? " checked" : "") +
+            "></label>"
+        );
+      }
+      parts.push('<div class="entry-main">');
       if (!editing) {
         parts.push('<div class="entry-actions">');
         parts.push(
           '<button type="button" class="icon-btn" title="Edit" data-action="edit" data-id="' +
-            escapeAttr(String(id)) +
+            escapeAttr(idStr) +
             '">✎</button>'
         );
         parts.push(
           '<button type="button" class="icon-btn danger" title="Delete" data-action="delete" data-id="' +
-            escapeAttr(String(id)) +
+            escapeAttr(idStr) +
             '">🗑</button>'
         );
         parts.push("</div>");
-      }
-      parts.push(
-        '<div class="entry-meta">' +
-          escapeHtml(formatDate(e.created_at)) +
-          "</div>"
-      );
-      if (!editing) {
+        parts.push(
+          '<div class="entry-meta">' +
+            escapeHtml(formatDate(e.created_at)) +
+            "</div>"
+        );
         if (e.summary) {
-          parts.push('<div class="summary">' + item.summaryHtml + "</div>");
+          parts.push(
+            '<div class="entry-title-line">' + item.summaryHtml + "</div>"
+          );
+        } else {
+          parts.push(
+            '<div class="entry-title-line untitled">Untitled</div>'
+          );
         }
+        parts.push('<div class="entry-body">' + item.rawHtml + "</div>");
         if (item.tagSpans && item.tagSpans.length) {
           parts.push('<div class="tags">');
           var ti;
@@ -445,7 +796,7 @@
             parts.push(ts.html);
             parts.push(
               '</span><button type="button" class="tag-remove" title="Remove tag" aria-label="Remove tag" data-action="remove-tag" data-id="' +
-                escapeAttr(String(id)) +
+                escapeAttr(idStr) +
                 '" data-tag="' +
                 escapeAttr(String(ts.text)) +
                 '">x</button></span>'
@@ -458,36 +809,42 @@
             '<div class="sentiment">' + escapeHtml(e.sentiment) + "</div>"
           );
         }
-        parts.push('<div class="raw">' + item.rawHtml + "</div>");
       } else {
         parts.push('<div class="edit-box">');
         parts.push(
-          '<textarea data-edit-field="1">' +
+          '<label>Title</label><input type="text" data-edit-title value="' +
+            escapeAttr(S.editTitle) +
+            '">'
+        );
+        parts.push(
+          '<label style="margin-top:0.5rem">Description</label><textarea data-edit-desc>' +
             escapeHtml(S.editDraft) +
             "</textarea>"
+        );
+        parts.push(
+          '<label style="margin-top:0.5rem">Tags</label><input type="text" data-edit-tags value="' +
+            escapeAttr(S.editTags) +
+            '">'
         );
         parts.push('<div class="btn-row">');
         parts.push(
           '<button type="button" data-action="save-edit" id="btn-save-edit" ' +
-            (S.editBusy || !S.editDraft.trim() ? "disabled" : "") +
+            (S.editInFlight || !S.editDraft.trim() ? "disabled" : "") +
             ">" +
-            (S.editBusy ? "Saving..." : "Save Edit") +
+            (S.editInFlight ? "Saving…" : "Save Edit") +
             "</button>"
         );
         parts.push(
           '<button type="button" class="secondary" data-action="cancel-edit" ' +
-            (S.editBusy ? "disabled" : "") +
+            (S.editInFlight ? "disabled" : "") +
             ">Cancel</button>"
         );
-        parts.push("</div>");
-        parts.push(
-          '<p class="tiny-note">Edit updates raw text only unless you provide metadata via import JSON.</p>'
-        );
-        parts.push("</div>");
+        parts.push("</div></div>");
       }
-      parts.push("</article>");
+      parts.push("</div></article>");
     }
     root.innerHTML = parts.join("");
+    paintBulkBar();
   }
 
   function getEntryById(id) {
@@ -505,23 +862,33 @@
       S.viewRows = [];
       paintEntryList();
       paintEmptyState();
+      paintBulkBar();
+      rebuildTagCatalog();
       return;
     }
     S.loading = true;
+    beginSync();
     setLoadError("");
     try {
       var list = await S.transport.list();
       S.fullData = (list || []).map(enrichEntry);
+      pruneSelectedIds();
+      rebuildTagCatalog();
       applyLocalFilter();
     } catch (err) {
       setLoadError((err && err.message) || "Failed to load entries");
       S.fullData = [];
       S.viewRows = [];
+      S.tagCatalog = [];
       paintEntryList();
       paintEmptyState();
+      paintBulkBar();
+      rebuildTagCatalog();
     } finally {
       S.loading = false;
+      endSync();
       paintEmptyState();
+      paintBulkBar();
     }
   }
 
@@ -543,6 +910,8 @@
       if (ent) {
         S.editingId = ent.id;
         S.editDraft = ent.raw_text || "";
+        S.editTitle = ent.summary || "";
+        S.editTags = (ent.tags || []).join(", ");
         paintEntryList();
       }
       return;
@@ -564,16 +933,23 @@
     if (action === "cancel-edit") {
       S.editingId = null;
       S.editDraft = "";
+      S.editTitle = "";
+      S.editTags = "";
       paintEntryList();
       return;
     }
   }
 
   function onEntryListInput(ev) {
-    if (ev.target.getAttribute("data-edit-field")) {
-      S.editDraft = ev.target.value;
+    var t = ev.target;
+    if (t.getAttribute("data-edit-desc")) {
+      S.editDraft = t.value;
       var b = $("btn-save-edit");
       if (b) b.disabled = S.editBusy || !S.editDraft.trim();
+    } else if (t.getAttribute("data-edit-title")) {
+      S.editTitle = t.value;
+    } else if (t.getAttribute("data-edit-tags")) {
+      S.editTags = t.value;
     }
   }
 
@@ -597,128 +973,190 @@
     paintCtxMenu();
   }
 
-  async function saveEntry() {
-    var ta = $("new-entry");
-    if (!ta || !S.transport) return;
-    var raw_text = ta.value.trim();
+  function saveEntry() {
+    var titleEl = $("entry-title");
+    var descEl = $("entry-desc");
+    var tagsEl = $("entry-tags");
+    if (!descEl || !S.transport) return;
+    var raw_text = descEl.value.trim();
     if (!raw_text) return;
-    S.saveBusy = "save";
+    if (S.saveInFlight) return;
+    var summary = titleEl ? titleEl.value.trim() : "";
+    var tags = tagsEl ? parseTagsFromInput(tagsEl.value) : [];
+    S.saveInFlight = true;
+    beginSync();
     setSaveError("");
     syncSaveButton();
-    try {
-      await S.transport.create({ raw_text: raw_text });
-      ta.value = "";
-      await loadEntries();
-    } catch (err) {
-      setSaveError((err && err.message) || "Save failed");
-    } finally {
-      S.saveBusy = null;
-      syncSaveButton();
-    }
-  }
-
-  async function updateEntry() {
-    if (!S.editingId || !S.editDraft.trim() || !S.transport) return;
-    S.editBusy = true;
-    paintEntryList();
-    setSaveError("");
-    try {
-      await S.transport.update({
-        id: S.editingId,
-        raw_text: S.editDraft.trim(),
+    S.transport
+      .create({
+        raw_text: raw_text,
+        summary: summary,
+        tags: tags,
+      })
+      .then(function () {
+        if (titleEl) titleEl.value = "";
+        descEl.value = "";
+        if (tagsEl) tagsEl.value = "";
+        var panel = $("tag-suggest-panel");
+        if (panel) {
+          panel.hidden = true;
+          panel.innerHTML = "";
+        }
+        return loadEntries();
+      })
+      .catch(function (err) {
+        setSaveError((err && err.message) || "Save failed");
+      })
+      .finally(function () {
+        endSync();
+        S.saveInFlight = false;
+        syncSaveButton();
       });
-      S.editingId = null;
-      S.editDraft = "";
-      await loadEntries();
-    } catch (err) {
-      setSaveError((err && err.message) || "Update failed");
-    } finally {
-      S.editBusy = false;
-      paintEntryList();
-    }
   }
 
-  async function importLogs() {
+  function updateEntry() {
+    if (!S.editingId || !S.editDraft.trim() || !S.transport) return;
+    if (S.editInFlight) return;
+    var id = S.editingId;
+    var draft = S.editDraft.trim();
+    var title = String(S.editTitle || "").trim();
+    var tags = parseTagsFromInput(S.editTags);
+    S.editInFlight = true;
+    paintEntryList();
+    beginSync();
+    setSaveError("");
+    S.transport
+      .update({
+        id: id,
+        raw_text: draft,
+        summary: title,
+        tags: tags,
+      })
+      .then(function () {
+        S.editingId = null;
+        S.editDraft = "";
+        S.editTitle = "";
+        S.editTags = "";
+        return loadEntries();
+      })
+      .catch(function (err) {
+        setSaveError((err && err.message) || "Update failed");
+      })
+      .finally(function () {
+        endSync();
+        S.editInFlight = false;
+        paintEntryList();
+      });
+  }
+
+  function importLogs() {
     var ta = $("import-json");
     if (!ta || !S.transport) return;
     if (!ta.value.trim()) return;
-    S.importBusy = true;
-    setImportResult("");
+    if (S.importInFlight) return;
+    S.importInFlight = true;
+    beginSync();
     setSaveError("");
     syncImportButton();
+    var payload;
     try {
       var parsed = JSON.parse(ta.value);
       var logs = Array.isArray(parsed) ? parsed : parsed.logs;
       if (!Array.isArray(logs) || !logs.length) {
         throw new Error("Invalid import JSON");
       }
-      var data = await S.transport.importLogs({ logs: logs });
-      setImportResult(
-        "Imported " +
-          data.imported_count +
-          " logs. Errors: " +
-          data.error_count +
-          "."
-      );
-      await loadEntries();
-    } catch (err) {
-      setImportResult("");
-      setSaveError((err && err.message) || "Import failed");
-    } finally {
-      S.importBusy = false;
+      payload = { logs: logs };
+    } catch (e) {
+      endSync();
+      S.importInFlight = false;
       syncImportButton();
+      setSaveError((e && e.message) || "Invalid JSON");
+      return;
     }
+    S.transport
+      .importLogs(payload)
+      .then(function (data) {
+        ta.value = "";
+        openImportModal(data);
+        return loadEntries();
+      })
+      .catch(function (err) {
+        setSaveError((err && err.message) || "Import failed");
+      })
+      .finally(function () {
+        endSync();
+        S.importInFlight = false;
+        syncImportButton();
+      });
   }
 
-  async function deleteEntry(id) {
+  function deleteEntry(id) {
     if (!S.transport) return;
+    if (!confirm("Delete this entry?")) return;
+    beginSync();
     setSaveError("");
-    try {
-      await S.transport.remove({ id: id });
-      if (S.editingId === Number(id) || String(S.editingId) === String(id)) {
-        S.editingId = null;
-        S.editDraft = "";
-      }
-      await loadEntries();
-    } catch (err) {
-      setSaveError((err && err.message) || "Delete failed");
-    }
+    S.transport
+      .remove({ id: id })
+      .then(function () {
+        if (S.editingId === Number(id) || String(S.editingId) === String(id)) {
+          S.editingId = null;
+          S.editDraft = "";
+          S.editTitle = "";
+          S.editTags = "";
+        }
+        delete S.selectedIds[String(id)];
+        return loadEntries();
+      })
+      .catch(function (err) {
+        setSaveError((err && err.message) || "Delete failed");
+      })
+      .finally(endSync);
   }
 
-  async function removeTag(entry, tagToRemove) {
+  function removeTag(entry, tagToRemove) {
     if (!S.transport) return;
     var nextTags = (entry.tags || []).filter(function (t) {
       return t !== tagToRemove;
     });
+    beginSync();
     setSaveError("");
-    try {
-      await S.transport.update({
+    S.transport
+      .update({
         id: entry.id,
         raw_text: entry.raw_text || "",
         tags: nextTags,
-      });
-      await loadEntries();
-    } catch (err) {
-      setSaveError((err && err.message) || "Remove tag failed");
-    }
+      })
+      .then(function () {
+        return loadEntries();
+      })
+      .catch(function (err) {
+        setSaveError((err && err.message) || "Remove tag failed");
+      })
+      .finally(endSync);
   }
 
-  async function addSelectionAsTag() {
+  function addSelectionAsTag() {
     if (!S.tagMenu.entryId || !S.tagMenu.phrase || !S.transport) {
       closeTagMenu();
       return;
     }
-    try {
-      await S.transport.appendTag({
-        id: S.tagMenu.entryId,
-        tag: S.tagMenu.phrase,
-      });
-      await loadEntries();
-    } catch (err) {
-      setSaveError((err && err.message) || "Add tag failed");
-    } finally {
-      closeTagMenu();
-    }
+    var phrase = S.tagMenu.phrase;
+    var eid = S.tagMenu.entryId;
+    closeTagMenu();
+    beginSync();
+    setSaveError("");
+    S.transport
+      .appendTag({
+        id: eid,
+        tag: phrase,
+      })
+      .then(function () {
+        return loadEntries();
+      })
+      .catch(function (err) {
+        setSaveError((err && err.message) || "Add tag failed");
+      })
+      .finally(endSync);
   }
 
   function clearSearch() {
@@ -729,6 +1167,17 @@
     if (q) q.focus();
   }
 
+  function bindModal() {
+    var closes = document.querySelectorAll("[data-close-modal]");
+    var i;
+    for (i = 0; i < closes.length; i++) {
+      closes[i].addEventListener("click", closeImportModal);
+    }
+    document.addEventListener("keydown", function (e) {
+      if (e.key === "Escape") closeImportModal();
+    });
+  }
+
   function bind() {
     var app = $("app");
     if (app) {
@@ -737,9 +1186,16 @@
     var list = $("entry-list");
     if (list) {
       list.addEventListener("click", onEntryListClick);
+      list.addEventListener("change", onEntryListChange);
       list.addEventListener("input", onEntryListInput);
       list.addEventListener("contextmenu", onEntryContextMenu);
     }
+    var bulkAll = $("bulk-select-all");
+    if (bulkAll) bulkAll.addEventListener("change", onBulkSelectAllChange);
+    var bulkAdd = $("bulk-add-tag-btn");
+    if (bulkAdd) bulkAdd.addEventListener("click", bulkAddTagToSelected);
+    var bulkDel = $("bulk-delete-btn");
+    if (bulkDel) bulkDel.addEventListener("click", bulkDeleteSelected);
     var q = $("q");
     var tag = $("tag");
     if (q) {
@@ -755,9 +1211,31 @@
     if (sc) sc.addEventListener("click", clearSearch);
     var bs = $("btn-save");
     if (bs) bs.addEventListener("click", function () { void saveEntry(); });
-    var ne = $("new-entry");
-    if (ne) {
-      ne.addEventListener("input", syncSaveButton);
+    var et = $("entry-title");
+    var ed = $("entry-desc");
+    var eTags = $("entry-tags");
+    if (et) et.addEventListener("input", syncSaveButton);
+    if (ed) ed.addEventListener("input", syncSaveButton);
+    if (eTags) {
+      eTags.addEventListener("focus", renderTagSuggest);
+      eTags.addEventListener("input", renderTagSuggest);
+      eTags.addEventListener("blur", function () {
+        setTimeout(function () {
+          var panel = $("tag-suggest-panel");
+          if (panel) {
+            panel.hidden = true;
+          }
+        }, 180);
+      });
+    }
+    var panel = $("tag-suggest-panel");
+    if (panel) {
+      panel.addEventListener("mousedown", function (e) {
+        var b = e.target.closest("[data-suggest-tag]");
+        if (!b) return;
+        e.preventDefault();
+        insertTagSuggestion(b.getAttribute("data-suggest-tag"));
+      });
     }
     var bi = $("btn-import");
     var ij = $("import-json");
@@ -778,6 +1256,7 @@
     }
     window.addEventListener("scroll", closeTagMenu, true);
     window.addEventListener("resize", closeTagMenu);
+    bindModal();
   }
 
   function init() {
