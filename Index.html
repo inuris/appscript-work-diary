@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Personal Diary</title>
+  <script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
+  <?!= include('Styles'); ?>
+</head>
+<body>
+  <script>
+    window.DIARY_APP_CONFIG = {
+      APPS_SCRIPT_URL: <?!= JSON.stringify(webAppUrl || "") ?>
+    };
+  </script>
+
+  <div id="app" @click="closeTagMenu">
+    <h1>Diary</h1>
+    <p v-if="runtimeWarning" class="err">{{ runtimeWarning }}</p>
+
+    <section class="panel">
+      <label for="new-entry">New entry</label>
+      <textarea id="new-entry" v-model="draft" placeholder="Write your thoughts..."></textarea>
+      <div class="btn-row">
+        <button type="button" :disabled="saveBusy || !draft.trim()" @click="saveEntry()">
+          {{ saveBusy === 'save' ? 'Saving...' : 'Save' }}
+        </button>
+      </div>
+      <p v-if="saveError" class="err">{{ saveError }}</p>
+
+      <div class="note-block">
+        <p>Manual AI trigger for Cursor (keyword: <strong>diary input</strong>)</p>
+<pre>diary input
+Convert the text below into JSON for diary import.
+Return ONLY valid JSON in this schema:
+{
+  "logs": [
+    {
+      "created_at": "YYYY-MM-DD HH:MM:SS",
+      "raw_text": "original diary text",
+      "summary": "1-2 concise sentences",
+      "tags": ["tag1", "tag2"],
+      "sentiment": "Positive|Negative|Neutral"
+    }
+  ]
+}
+Rules: keep tags lowercase; max 12 tags per log; do not include markdown fences.</pre>
+      </div>
+    </section>
+
+    <section class="panel">
+      <label for="import-json">Import multi logs (JSON)</label>
+      <textarea id="import-json" v-model="importText" placeholder='{"logs":[{"raw_text":"...","summary":"...","tags":["..."],"sentiment":"Neutral"}]}'></textarea>
+      <div class="btn-row">
+        <button type="button" :disabled="importBusy || !importText.trim()" @click="importLogs">
+          {{ importBusy ? 'Importing...' : 'Import Logs' }}
+        </button>
+      </div>
+      <p v-if="importResult" class="tiny-note">{{ importResult }}</p>
+    </section>
+
+    <section class="panel filters">
+      <div class="row">
+        <div>
+          <label for="q">Search</label>
+          <div class="search-wrap">
+            <input id="q" type="search" v-model="searchQ" placeholder="Keyword..." @input="debouncedLoad" />
+            <button v-if="searchQ.trim()" class="search-clear" type="button" @click="clearSearch" aria-label="Clear search">x</button>
+          </div>
+        </div>
+        <div>
+          <label for="tag">Tag</label>
+          <input id="tag" type="text" v-model="tagFilter" placeholder="Filter by tag..." @input="debouncedLoad" />
+        </div>
+      </div>
+    </section>
+
+    <p v-if="loadError" class="err">{{ loadError }}</p>
+    <p v-if="!loading && !entries.length" class="empty">No entries yet.</p>
+
+    <article v-for="e in entries" :key="e.id" class="entry" @contextmenu="openTagMenu($event, e)">
+      <div class="entry-actions" v-if="editingId !== e.id">
+        <button type="button" class="icon-btn" title="Edit" @click.stop="startEdit(e)">✎</button>
+        <button type="button" class="icon-btn danger" title="Delete" @click.stop="deleteEntry(e.id)">🗑</button>
+      </div>
+      <div class="entry-meta">{{ formatDate(e.created_at) }}</div>
+      <template v-if="editingId !== e.id">
+        <div v-if="e.summary" class="summary" v-html="highlightText(e.summary)"></div>
+        <div v-if="e.tags && e.tags.length" class="tags">
+          <span v-for="t in e.tags" :key="t" class="tag">
+            <span v-html="highlightText(t)"></span>
+            <button type="button" class="tag-remove" title="Remove tag" aria-label="Remove tag" @click.stop="removeTag(e, t)">x</button>
+          </span>
+        </div>
+        <div v-if="e.sentiment" class="sentiment">{{ e.sentiment }}</div>
+        <div class="raw" v-html="highlightText(e.raw_text)"></div>
+      </template>
+      <div v-else class="edit-box">
+        <textarea v-model="editDraft"></textarea>
+        <div class="btn-row">
+          <button type="button" :disabled="editBusy || !editDraft.trim()" @click="updateEntry()">
+            {{ editBusy === 'save' ? 'Saving...' : 'Save Edit' }}
+          </button>
+          <button type="button" class="secondary" :disabled="editBusy" @click="cancelEdit">Cancel</button>
+        </div>
+        <p class="tiny-note">Edit updates raw text only unless you provide metadata via import JSON.</p>
+      </div>
+    </article>
+
+    <div v-if="tagMenu.visible" class="ctx-menu" :style="{ left: tagMenu.x + 'px', top: tagMenu.y + 'px' }" @click.stop>
+      <button type="button" @click="addSelectionAsTag">Add selection as tag</button>
+    </div>
+  </div>
+
+  <?!= include('ApiClient'); ?>
+  <?!= include('App'); ?>
+</body>
+</html>
