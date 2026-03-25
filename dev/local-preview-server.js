@@ -1,6 +1,11 @@
 /**
- * Local preview: same UI bundle as Apps Script + in-memory/JSON-backed API.
- * Run from repo root: node dev/local-preview-server.js
+ * Local preview: same UI bundle as Apps Script + API either local JSON or your
+ * deployed web app (real Google Sheet: list/create/update/delete/import/tags).
+ *
+ * Sheet-backed mode — set DIARY_REMOTE_WEBAPP_URL to the web app URL (…/exec):
+ *   DIARY_REMOTE_WEBAPP_URL="https://script.google.com/macros/s/…/exec" npm run preview
+ *
+ * Requires Node 18+ when using remote mode (global fetch).
  */
 /* eslint-disable no-console */
 "use strict";
@@ -18,7 +23,76 @@ function readUtf8(relFromRoot) {
   return fs.readFileSync(path.join(REPO_ROOT, relFromRoot), "utf8");
 }
 
-function buildAssembledIndex(port) {
+/** Trimmed deployed web app base URL, or "" for local-only JSON store. */
+function getRemoteWebAppBaseUrl() {
+  var u =
+    process.env.DIARY_REMOTE_WEBAPP_URL ||
+    process.env.APPS_SCRIPT_WEBAPP_URL ||
+    "";
+  u = String(u).trim().replace(/\/$/, "");
+  if (!u) return "";
+  if (!/^https?:\/\//i.test(u)) {
+    console.warn(
+      "DIARY_REMOTE_WEBAPP_URL must be a full URL (https://…/exec). Ignoring."
+    );
+    return "";
+  }
+  return u;
+}
+
+function buildListUrl(remoteBase) {
+  var u = new URL(remoteBase);
+  u.searchParams.set("action", "list");
+  return u.href;
+}
+
+function parseRemoteJson(text) {
+  try {
+    return JSON.parse(text);
+  } catch (_) {
+    return {
+      ok: false,
+      error:
+        "Remote returned non-JSON. First 400 chars:\n" + String(text).slice(0, 400),
+    };
+  }
+}
+
+function forwardRemoteList(remoteBase) {
+  if (typeof global.fetch !== "function") {
+    return Promise.reject(
+      new Error("Node 18+ required for Google Sheet mode (global fetch).")
+    );
+  }
+  return global
+    .fetch(buildListUrl(remoteBase), { redirect: "follow" })
+    .then(function (r) {
+      return r.text();
+    })
+    .then(parseRemoteJson);
+}
+
+function forwardRemotePost(remoteBase, bodyObj) {
+  if (typeof global.fetch !== "function") {
+    return Promise.reject(
+      new Error("Node 18+ required for Google Sheet mode (global fetch).")
+    );
+  }
+  return global
+    .fetch(remoteBase, {
+      method: "POST",
+      redirect: "follow",
+      headers: { "Content-Type": "text/plain;charset=UTF-8" },
+      body: JSON.stringify(bodyObj),
+    })
+    .then(function (r) {
+      return r.text();
+    })
+    .then(parseRemoteJson);
+}
+
+function buildAssembledIndex(port, opts) {
+  opts = opts || {};
   var index = readUtf8("Index.html");
   var baseUrl = "http://127.0.0.1:" + port;
   index = index.replace(
@@ -33,6 +107,15 @@ function buildAssembledIndex(port) {
     /<\?!=\s*JSON\.stringify\(webAppUrl\s*\|\|\s*""\)\s*\?>/g,
     JSON.stringify(baseUrl)
   );
+  if (opts.remoteBackend) {
+    index = index.replace(
+      /<body>/,
+      "<body>" +
+        '<div style="background:#2a1f0d;color:#f8d99a;padding:0.4rem 0.75rem;font-size:0.78rem;text-align:center;border-bottom:1px solid #5c4518;font-weight:600;" role="status">' +
+        "Local preview UI — read/write <strong>your live Google Sheet</strong> via deployed web app" +
+        "</div>"
+    );
+  }
   return index;
 }
 
@@ -270,15 +353,31 @@ function jsonResponse(res, obj) {
 function main() {
   var port = Number(process.env.PORT) || DEFAULT_PORT;
   var store = loadStore();
+  var remoteBase = getRemoteWebAppBaseUrl();
 
   var server = http.createServer(function (req, res) {
     var pu = url.parse(req.url || "/", true);
 
     if (req.method === "GET" && pu.pathname === "/") {
       if (pu.query && pu.query.action === "list") {
+        if (remoteBase) {
+          forwardRemoteList(remoteBase)
+            .then(function (out) {
+              jsonResponse(res, out);
+            })
+            .catch(function (err) {
+              jsonResponse(res, {
+                ok: false,
+                error: String(err && err.message ? err.message : err),
+              });
+            });
+          return;
+        }
         return jsonResponse(res, { ok: true, entries: readAllSorted(store) });
       }
-      var html = buildAssembledIndex(port);
+      var html = buildAssembledIndex(port, {
+        remoteBackend: Boolean(remoteBase),
+      });
       var htmlBuf = Buffer.from(html, "utf8");
       res.writeHead(200, {
         "Content-Type": "text/html; charset=utf-8",
@@ -294,8 +393,24 @@ function main() {
       });
       req.on("end", function () {
         try {
-          var raw = Buffer.concat(chunks).toString("utf8").trim();
-          var body = JSON.parse(raw);
+          var rawBody = Buffer.concat(chunks).toString("utf8").trim();
+          var body = JSON.parse(rawBody);
+          if (remoteBase) {
+            forwardRemotePost(remoteBase, {
+              action: body.action,
+              payload: body.payload || {},
+            })
+              .then(function (out) {
+                jsonResponse(res, out);
+              })
+              .catch(function (err) {
+                jsonResponse(res, {
+                  ok: false,
+                  error: String(err && err.message ? err.message : err),
+                });
+              });
+            return;
+          }
           var out = dispatchAction_(store, body.action, body.payload || {});
           return jsonResponse(res, out);
         } catch (err) {
@@ -313,13 +428,19 @@ function main() {
   });
 
   server.listen(port, "127.0.0.1", function () {
-    console.log(
-      "Diary local preview — open http://127.0.0.1:" +
-        port +
-        "/\n" +
-        "  Data file: " +
-        STORE_FILE
-    );
+    var lines = [
+      "Diary local preview — open http://127.0.0.1:" + port + "/",
+    ];
+    if (remoteBase) {
+      lines.push("  Backend: Google Sheet (proxy → deployed web app)");
+      lines.push("  Remote:  " + remoteBase);
+    } else {
+      lines.push("  Backend: local JSON — " + STORE_FILE);
+      lines.push(
+        "  Sheet:   set DIARY_REMOTE_WEBAPP_URL=…/exec to use your live Sheet"
+      );
+    }
+    console.log(lines.join("\n"));
   });
 }
 

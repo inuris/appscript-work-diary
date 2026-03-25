@@ -38,9 +38,16 @@ In **`WebAppHost.gs`**, set `APP_CONFIG.SS_ID` and `APP_CONFIG.SHEET_GID`.
 
 Sheet row 1: `id`, `created_at`, `raw_text`, `summary`, `tags`, `sentiment`.
 
-## Local preview (no Apps Script)
+## Local preview
 
-From the repo root, **`npm run preview`** (or `node dev/local-preview-server.js`) starts **`http://127.0.0.1:3333/`**. It assembles `Index.html` the same way HtmlService does (`include` for styles + UI, injects `DIARY_APP_CONFIG.APPS_SCRIPT_URL` pointing at the same origin) and serves a **POST/GET API** matching `WebAppHost.gs` (`?action=list` and JSON `{ action, payload }`). Data is stored in **`dev/local-diary-data.json`** (gitignored). Change the port with **`PORT`** (e.g. bash: `PORT=4000 npm run preview`; PowerShell: `$env:PORT=4000; npm run preview`).
+From the repo root, **`npm run preview`** (or `node dev/local-preview-server.js`) starts **`http://127.0.0.1:3333/`**. It assembles `Index.html` like HtmlService (`include` for styles + UI, sets `DIARY_APP_CONFIG.APPS_SCRIPT_URL` to that origin). The browser only talks to localhost; the Node process implements the same **`GET ?action=list`** and **`POST { action, payload }`** contract as `WebAppHost.gs`.
+
+- **Offline / fake data:** leave **`DIARY_REMOTE_WEBAPP_URL`** unset. Entries live in **`dev/local-diary-data.json`** (gitignored).
+- **Real Google Sheet (edit/delete against production data):** set **`DIARY_REMOTE_WEBAPP_URL`** (alias **`APPS_SCRIPT_WEBAPP_URL`**) to your deployed web app URL (`https://script.google.com/macros/s/…/exec`). The preview server **proxies** every list/create/update/delete/import/tag call to that URL, so Sheet behavior matches production while you iterate on HTML/CSS/JS locally. Use a deployment where the server can call the endpoint without an interactive login (e.g. **Execute as: Me**, **Who has access: Anyone** — or equivalent for your needs). **Node 18+** is required for this mode (`fetch`).
+
+Examples: bash `DIARY_REMOTE_WEBAPP_URL="https://script.google.com/macros/s/XXX/exec" npm run preview` — PowerShell `$env:DIARY_REMOTE_WEBAPP_URL="https://script.google.com/macros/s/XXX/exec"; npm run preview`. Change the port with **`PORT`** (bash `PORT=4000 …`; PowerShell `$env:PORT=4000; …`).
+
+**Cursor / VS Code:** press **F5** (or **Run → Start Debugging**). Pick **Local preview (offline JSON)** for `dev/local-diary-data.json`, or **Local preview (Google Sheet)** after copying **`.env.example`** to **`.env`** and setting **`DIARY_REMOTE_WEBAPP_URL`** (Cursor loads `.env` for that configuration). The integrated terminal shows the URL; open **`http://127.0.0.1:3333/`** in a browser.
 
 ## Deploy
 
