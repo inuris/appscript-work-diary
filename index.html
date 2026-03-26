@@ -1,18 +1,13 @@
 <!DOCTYPE html>
-<!-- Index.html — HtmlService: sidebar (new entry + import) + main (search & results first). -->
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Personal Diary</title>
-  <?!= include('DiaryStyles'); ?>
+  <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
-  <script>
-    window.DIARY_APP_CONFIG = {
-      APPS_SCRIPT_URL: <?!= JSON.stringify(webAppUrl || "") ?>
-    };
-  </script>
+  <script src="config.js"></script>
 
   <div id="app" class="app-shell">
     <aside class="sidebar panel">
@@ -52,7 +47,7 @@
         <textarea
           id="import-json"
           class="import-textarea"
-          placeholder="Paste JSON from AI (diary)" 
+          placeholder="Paste JSON from AI (diary)"
           rows="5"
         ></textarea>
         <div class="btn-row">
@@ -143,109 +138,7 @@
     </div>
   </div>
 
-  <script>
-  window.DiaryTransport = (function () {
-    function run(funcName, payload) {
-      return new Promise(function (resolve, reject) {
-        google.script.run
-          .withSuccessHandler(resolve)
-          .withFailureHandler(function (err) {
-            reject(new Error((err && err.message) || String(err)));
-          })[funcName](payload || {});
-      });
-    }
-
-    function createAppsScriptRunTransport() {
-      return {
-        list: function () {
-          return run("apiList", {}).then(function (data) {
-            if (!data.ok) throw new Error(data.error || "Apps Script error");
-            return data.entries || [];
-          });
-        },
-        create: function (payload) {
-          return run("apiCreate", payload).then(function (data) {
-            if (!data.ok) throw new Error(data.error || "Apps Script error");
-            return data;
-          });
-        },
-        update: function (payload) {
-          return run("apiUpdate", payload).then(function (data) {
-            if (!data.ok) throw new Error(data.error || "Apps Script error");
-            return data;
-          });
-        },
-        remove: function (payload) {
-          return run("apiDelete", payload).then(function (data) {
-            if (!data.ok) throw new Error(data.error || "Apps Script error");
-            return data;
-          });
-        },
-        importLogs: function (payload) {
-          return run("apiImport", payload).then(function (data) {
-            if (!data.ok) throw new Error(data.error || "Apps Script error");
-            return data;
-          });
-        },
-        appendTag: function (payload) {
-          return run("apiAppendTag", payload).then(function (data) {
-            if (!data.ok) throw new Error(data.error || "Apps Script error");
-            return data;
-          });
-        },
-      };
-    }
-
-    function createHttpTransport(baseUrl) {
-      function post(action, payload) {
-        return fetch(baseUrl, {
-          method: "POST",
-          headers: { "Content-Type": "text/plain;charset=UTF-8" },
-          body: JSON.stringify({ action: action, payload: payload || {} }),
-        })
-          .then(function (r) {
-            return r.json();
-          })
-          .then(function (data) {
-            if (!data.ok) throw new Error(data.error || "Apps Script error");
-            return data;
-          });
-      }
-      return {
-        list: function () {
-          return fetch(baseUrl + "?action=list")
-            .then(function (r) {
-              return r.json();
-            })
-            .then(function (data) {
-              if (!data.ok) throw new Error(data.error || "Apps Script error");
-              return data.entries || [];
-            });
-        },
-        create: function (payload) {
-          return post("create", payload);
-        },
-        update: function (payload) {
-          return post("update", payload);
-        },
-        remove: function (payload) {
-          return post("delete", payload);
-        },
-        importLogs: function (payload) {
-          return post("import", payload);
-        },
-        appendTag: function (payload) {
-          return post("append_tag", payload);
-        },
-      };
-    }
-
-    return {
-      createAppsScriptRunTransport: createAppsScriptRunTransport,
-      createHttpTransport: createHttpTransport,
-    };
-  })();
-  </script>
-  <?!= include('DiaryUiVanilla'); ?>
+  <script src="transport.js"></script>
+  <script src="app.js"></script>
 </body>
 </html>

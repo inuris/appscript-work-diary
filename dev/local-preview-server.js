@@ -123,32 +123,38 @@ function forwardRemotePost(remoteBase, bodyObj) {
     .then(parseRemoteJson);
 }
 
-function buildAssembledIndex(port, opts) {
-  opts = opts || {};
-  var index = readUtf8("Index.html");
-  var baseUrl = "http://127.0.0.1:" + port;
-  index = index.replace(
-    /<\?!=\s*include\('DiaryStyles'\);\s*\?>/g,
-    readUtf8("DiaryStyles.html")
-  );
-  index = index.replace(
-    /<\?!=\s*include\('DiaryUiVanilla'\);\s*\?>/g,
-    readUtf8("DiaryUiVanilla.html")
-  );
-  index = index.replace(
-    /<\?!=\s*JSON\.stringify\(webAppUrl\s*\|\|\s*""\)\s*\?>/g,
-    JSON.stringify(baseUrl)
-  );
-  if (opts.remoteBackend) {
-    index = index.replace(
-      /<body>/,
-      "<body>" +
-        '<div style="background:#2a1f0d;color:#f8d99a;padding:0.4rem 0.75rem;font-size:0.78rem;text-align:center;border-bottom:1px solid #5c4518;font-weight:600;" role="status">' +
-        "Local preview UI — read/write <strong>your live Google Sheet</strong> via deployed web app" +
-        "</div>"
-    );
+function getStaticAsset(pathname) {
+  if (pathname === "/") {
+    return { mime: "text/html; charset=utf-8", body: readUtf8("index.html") };
   }
-  return index;
+  if (pathname === "/styles.css") {
+    return { mime: "text/css; charset=utf-8", body: readUtf8("styles.css") };
+  }
+  if (pathname === "/transport.js") {
+    return {
+      mime: "application/javascript; charset=utf-8",
+      body: readUtf8("transport.js"),
+    };
+  }
+  if (pathname === "/app.js") {
+    return {
+      mime: "application/javascript; charset=utf-8",
+      body: readUtf8("app.js"),
+    };
+  }
+  return null;
+}
+
+function buildRuntimeConfigScript(port) {
+  var baseUrl = "http://127.0.0.1:" + port;
+  return (
+    "window.DIARY_APP_CONFIG = Object.assign(" +
+    "{ APPS_SCRIPT_URL: " +
+    JSON.stringify(baseUrl) +
+    " }," +
+    "window.DIARY_APP_CONFIG || {}" +
+    ");"
+  );
 }
 
 function normalizeLineEndings(s) {
@@ -382,7 +388,7 @@ function jsonResponse(res, obj) {
   res.end(body);
 }
 
-/** Port the HTTP server is listening on (for DIARY_APP_CONFIG in HTML). */
+/** Port the HTTP server is listening on. */
 function getBoundPort(server) {
   var a = server.address();
   if (a && typeof a === "object" && a.port) return a.port;
@@ -455,8 +461,8 @@ function main() {
   var server = http.createServer(function (req, res) {
     var pu = url.parse(req.url || "/", true);
 
-    if (req.method === "GET" && pu.pathname === "/") {
-      if (pu.query && pu.query.action === "list") {
+    if (req.method === "GET") {
+      if (pu.pathname === "/" && pu.query && pu.query.action === "list") {
         if (remoteBase) {
           forwardRemoteList(remoteBase)
             .then(function (out) {
@@ -472,15 +478,26 @@ function main() {
         }
         return jsonResponse(res, { ok: true, entries: readAllSorted(store) });
       }
-      var html = buildAssembledIndex(getBoundPort(server), {
-        remoteBackend: Boolean(remoteBase),
-      });
-      var htmlBuf = Buffer.from(html, "utf8");
-      res.writeHead(200, {
-        "Content-Type": "text/html; charset=utf-8",
-        "Content-Length": htmlBuf.length,
-      });
-      return res.end(htmlBuf);
+
+      if (pu.pathname === "/config.js") {
+        var conf = buildRuntimeConfigScript(getBoundPort(server));
+        var confBuf = Buffer.from(conf, "utf8");
+        res.writeHead(200, {
+          "Content-Type": "application/javascript; charset=utf-8",
+          "Content-Length": confBuf.length,
+        });
+        return res.end(confBuf);
+      }
+
+      var asset = getStaticAsset(pu.pathname);
+      if (asset) {
+        var assetBuf = Buffer.from(asset.body, "utf8");
+        res.writeHead(200, {
+          "Content-Type": asset.mime,
+          "Content-Length": assetBuf.length,
+        });
+        return res.end(assetBuf);
+      }
     }
 
     if (req.method === "POST" && pu.pathname === "/") {
