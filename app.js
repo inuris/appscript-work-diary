@@ -1,5 +1,3 @@
-<!-- DiaryUiVanilla — layout: sidebar (new entry + import) / main (search + list). -->
-<script>
 (function () {
   function $(id) {
     return document.getElementById(id);
@@ -10,14 +8,6 @@
     return String(cfg.APPS_SCRIPT_URL || "")
       .trim()
       .replace(/\/$/, "");
-  }
-
-  function isGasHosted() {
-    return (
-      typeof google !== "undefined" &&
-      google.script &&
-      typeof google.script.run !== "undefined"
-    );
   }
 
   function normalizeEntry(e) {
@@ -94,12 +84,10 @@
       .replace(/'/g, "&#39;");
   }
 
-  /** Normalize CRLF/CR to LF for sheet cells, imports, and textareas. */
   function normalizeLineEndings(text) {
     return String(text || "").replace(/\r\n/g, "\n").replace(/\r/g, "\n");
   }
 
-  /** True when there is no non-whitespace character (for “is this entry / field empty?”). */
   function isEffectivelyEmptyText(text) {
     return !/[^\s\u00A0]/.test(normalizeLineEndings(text));
   }
@@ -162,9 +150,11 @@
     var rawL = raw.toLowerCase();
     var sumL = summary.toLowerCase();
     var tags = ne.tags || [];
-    var tagsJoined = tags.map(function (t) {
-      return String(t);
-    }).join(" ");
+    var tagsJoined = tags
+      .map(function (t) {
+        return String(t);
+      })
+      .join(" ");
     var tagsL = tagsJoined.toLowerCase();
     return Object.assign({}, ne, {
       _rawLower: rawL,
@@ -343,9 +333,11 @@
       return;
     }
     var frag = getTagPrefixForSuggest(el);
-    var list = S.tagCatalog.filter(function (p) {
-      return !frag || p.tag.indexOf(frag) === 0;
-    }).slice(0, 12);
+    var list = S.tagCatalog
+      .filter(function (p) {
+        return !frag || p.tag.indexOf(frag) === 0;
+      })
+      .slice(0, 12);
     if (!list.length) {
       panel.hidden = true;
       panel.innerHTML = "";
@@ -383,11 +375,13 @@
     var root = $("import-modal");
     var body = $("import-modal-body");
     if (!root || !body) return;
-    var totalTry =
-      (data.imported_count || 0) + (data.error_count || 0);
+    var totalTry = (data.imported_count || 0) + (data.error_count || 0);
     var rows = [
       ["Rows processed", String(totalTry)],
-      ["Imported OK", String(data.imported_count != null ? data.imported_count : "—")],
+      [
+        "Imported OK",
+        String(data.imported_count != null ? data.imported_count : "—"),
+      ],
       ["Failed", String(data.error_count != null ? data.error_count : "—")],
     ];
     var html =
@@ -500,9 +494,7 @@
     var ids = getSelectedIdsArray();
     if (label) {
       label.textContent = ids.length ? String(ids.length) : "—";
-      label.title = ids.length
-        ? ids.length + " selected"
-        : "None selected";
+      label.title = ids.length ? ids.length + " selected" : "None selected";
     }
     var allCb = $("bulk-select-all");
     if (allCb) {
@@ -543,9 +535,11 @@
       var idStrs = S.viewRows.map(function (r) {
         return String(r.entry.id);
       });
-      var allOn = idStrs.length && idStrs.every(function (x) {
-        return S.selectedIds[x];
-      });
+      var allOn =
+        idStrs.length &&
+        idStrs.every(function (x) {
+          return S.selectedIds[x];
+        });
       var someOn = idStrs.some(function (x) {
         return S.selectedIds[x];
       });
@@ -600,9 +594,7 @@
     var tag = inp ? normalizeBulkTag(inp.value) : "";
     if (!ids.length || !tag || !S.transport) return;
     if (
-      !confirm(
-        'Add tag "' + tag + '" to ' + ids.length + " selected entries?"
-      )
+      !confirm('Add tag "' + tag + '" to ' + ids.length + " selected entries?")
     ) {
       return;
     }
@@ -664,10 +656,8 @@
     var loading = S.loading;
     var hasData = S.fullData.length > 0;
     var n = S.viewRows.length;
-    elNone.style.display =
-      !loading && n === 0 && !hasData ? "block" : "none";
-    elNoMatch.style.display =
-      !loading && n === 0 && hasData ? "block" : "none";
+    elNone.style.display = !loading && n === 0 && !hasData ? "block" : "none";
+    elNoMatch.style.display = !loading && n === 0 && hasData ? "block" : "none";
   }
 
   function setLoadError(msg) {
@@ -746,9 +736,7 @@
       var id = e.id;
       var idStr = String(id);
       var editing = S.editingId === id;
-      parts.push(
-        '<article class="entry" data-entry-id="' + escapeAttr(idStr) + '">'
-      );
+      parts.push('<article class="entry" data-entry-id="' + escapeAttr(idStr) + '">');
       parts.push('<div class="entry-main">');
       if (!editing) {
         parts.push('<div class="entry-actions">');
@@ -772,13 +760,9 @@
         parts.push("</div>");
         parts.push('<div class="entry-body">' + item.rawHtml + "</div>");
         if (e.summary) {
-          parts.push(
-            '<div class="entry-title-line">' + item.summaryHtml + "</div>"
-          );
+          parts.push('<div class="entry-title-line">' + item.summaryHtml + "</div>");
         } else {
-          parts.push(
-            '<div class="entry-title-line untitled">Untitled</div>'
-          );
+          parts.push('<div class="entry-title-line untitled">Untitled</div>');
         }
         if (item.tagSpans && item.tagSpans.length) {
           parts.push('<div class="tags">');
@@ -1261,24 +1245,20 @@
     }
 
     var DT = window.DiaryTransport;
-    if (!DT || typeof DT.createAppsScriptRunTransport !== "function") {
+    if (!DT || typeof DT.createHttpTransport !== "function") {
+      setLoadError("Missing window.DiaryTransport transport.js script.");
+      return;
+    }
+
+    var base = getAppScriptBaseUrl();
+    if (!base) {
       setLoadError(
-        "Missing window.DiaryTransport: keep the inline script in Index.html in sync with DiaryTransport.inline.html."
+        "Set APPS_SCRIPT_URL in config.js to your deployed Apps Script Web App /exec URL."
       );
       return;
     }
-    if (isGasHosted()) {
-      S.transport = DT.createAppsScriptRunTransport();
-    } else {
-      var base = getAppScriptBaseUrl();
-      if (!base) {
-        setLoadError(
-          "Set APPS_SCRIPT_URL in window.DIARY_APP_CONFIG (or open this UI from the Apps Script Web App)."
-        );
-        return;
-      }
-      S.transport = DT.createHttpTransport(base);
-    }
+    S.transport = DT.createHttpTransport(base);
+
     syncSaveButton();
     syncImportButton();
     syncSearchClear();
@@ -1291,4 +1271,3 @@
     init();
   }
 })();
-</script>

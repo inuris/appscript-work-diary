@@ -1,17 +1,12 @@
 /**
- * Web app entrypoint: HTTP + HtmlService.
- * - doGet / doPost: public API for external clients
- * - api*: same handlers for google.script.run from the hosted UI
- * Sheet CRUD lives in DiarySheetStore.gs.
+ * Web app entrypoint used by the GitHub Pages frontend.
+ * - doGet/doPost expose JSON API only
+ * - Sheet CRUD lives in DiarySheetStore.gs
  */
 var APP_CONFIG = {
   SS_ID: "1I7uKQc4Zm0Ak9YLdDPRZLiLQb2V5hO-N9jle_UJlO9Q",
   SHEET_GID: 2116546896,
 };
-
-function include(filename) {
-  return HtmlService.createHtmlOutputFromFile(filename).getContent();
-}
 
 function jsonOut_(obj) {
   return ContentService.createTextOutput(JSON.stringify(obj)).setMimeType(
@@ -19,11 +14,7 @@ function jsonOut_(obj) {
   );
 }
 
-/**
- * GET:
- * - default: render hosted UI
- * - ?action=list: return JSON list API (for portability)
- */
+/** GET JSON API. Supports ?action=list */
 function doGet(e) {
   try {
     e = e || {};
@@ -35,26 +26,18 @@ function doGet(e) {
       });
       return jsonOut_({ ok: true, entries: entries });
     }
-
-    var tpl = HtmlService.createTemplateFromFile("Index");
-    var webUrl = "";
-    try {
-      webUrl = ScriptApp.getService().getUrl() || "";
-    } catch (urlErr) {
-      webUrl = "";
-    }
-    tpl.webAppUrl = webUrl;
-    return tpl
-      .evaluate()
-      .setTitle("Diary")
-      .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
+    return jsonOut_({
+      ok: false,
+      error:
+        "Unknown action. Use GET ?action=list or POST with { action, payload }.",
+    });
   } catch (err) {
     return jsonOut_({ ok: false, error: String(err.message || err) });
   }
 }
 
 /**
- * POST JSON API (for portability / external clients).
+ * POST JSON API for GitHub Pages frontend and external clients.
  * Body schema: { action: "...", payload: {...} }
  */
 function doPost(e) {
@@ -71,23 +54,6 @@ function doPost(e) {
     return jsonOut_({ ok: false, error: String(err.message || err) });
   }
 }
-
-/**
- * Apps Script HtmlService bridge (google.script.run).
- * These wrappers make UI calls same-origin, so no CORS.
- */
-function apiList() {
-  var entries = readAllEntries_();
-  entries.sort(function (a, b) {
-    return String(b.created_at).localeCompare(String(a.created_at));
-  });
-  return { ok: true, entries: entries };
-}
-function apiCreate(payload) { return dispatchAction_("create", payload || {}); }
-function apiUpdate(payload) { return dispatchAction_("update", payload || {}); }
-function apiDelete(payload) { return dispatchAction_("delete", payload || {}); }
-function apiImport(payload) { return dispatchAction_("import", payload || {}); }
-function apiAppendTag(payload) { return dispatchAction_("append_tag", payload || {}); }
 
 function dispatchAction_(action, payload) {
   if (action === "create") return handleCreate_(payload);
