@@ -3,6 +3,14 @@
     return document.getElementById(id);
   }
 
+  function debugLog(message, detail) {
+    if (detail === undefined) {
+      console.log("[DiaryDebug] " + message);
+      return;
+    }
+    console.log("[DiaryDebug] " + message, detail);
+  }
+
   function getAppScriptBaseUrl() {
     var cfg = window.DIARY_APP_CONFIG || {};
     return String(cfg.APPS_SCRIPT_URL || "")
@@ -661,6 +669,9 @@
   }
 
   function setLoadError(msg) {
+    if (msg) {
+      debugLog("setLoadError", msg);
+    }
     var el = $("load-error");
     if (el) {
       el.textContent = msg || "";
@@ -669,6 +680,9 @@
   }
 
   function setRuntimeWarning(msg) {
+    if (msg) {
+      debugLog("setRuntimeWarning", msg);
+    }
     var el = $("runtime-warning");
     if (el) {
       el.textContent = msg || "";
@@ -843,11 +857,16 @@
     setLoadError("");
     try {
       var list = await S.transport.list();
+      debugLog("loadEntries success count", Array.isArray(list) ? list.length : 0);
       S.fullData = (list || []).map(enrichEntry);
       pruneSelectedIds();
       rebuildTagCatalog();
       applyLocalFilter();
     } catch (err) {
+      debugLog(
+        "loadEntries failed",
+        String(err && err.message ? err.message : err)
+      );
       setLoadError((err && err.message) || "Failed to load entries");
       S.fullData = [];
       S.viewRows = [];
@@ -1233,6 +1252,9 @@
 
   function init() {
     bind();
+    debugLog("Init start");
+    debugLog("Location", window.location.href);
+    debugLog("window.DIARY_APP_CONFIG", window.DIARY_APP_CONFIG || null);
     if (
       typeof window !== "undefined" &&
       window.location.protocol === "file:"
@@ -1251,7 +1273,22 @@
     }
 
     var base = getAppScriptBaseUrl();
+    debugLog("Resolved APPS_SCRIPT_URL", base || "(empty)");
     if (!base) {
+      fetch("config.js?ts=" + Date.now(), { cache: "no-store" })
+        .then(function (res) {
+          debugLog("config.js fetch status", res.status);
+          return res.text();
+        })
+        .then(function (txt) {
+          debugLog("config.js body preview", String(txt || "").slice(0, 400));
+        })
+        .catch(function (err) {
+          debugLog(
+            "config.js fetch failed",
+            String(err && err.message ? err.message : err)
+          );
+        });
       setLoadError(
         "Set APPS_SCRIPT_URL in config.js to your deployed Apps Script Web App /exec URL."
       );
