@@ -44,15 +44,14 @@ The backend sheet expects columns:
 
 ## Configure frontend (GitHub Pages)
 
-Edit `config.js`:
+This repo uses `.github/workflows/pages.yml` and environment **`work-diary`**.
+At deploy time, the workflow writes `config.js` from:
 
-```js
-window.DIARY_APP_CONFIG = {
-  APPS_SCRIPT_URL: "https://script.google.com/macros/s/YOUR_DEPLOYMENT_ID/exec"
-};
-```
+- `secrets.APPS_SCRIPT_URL` (in environment `work-diary`)
 
-Commit/push, then publish from GitHub Pages (branch-based Pages is fine).
+So you do **not** need to commit the real Apps Script URL to source.
+
+For local preview, you can still set `config.js` manually (or use the local proxy mode).
 
 ## Local preview
 

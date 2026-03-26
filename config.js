@@ -1,6 +1,8 @@
 /**
- * Frontend runtime config for GitHub Pages/static hosting.
- * Set APPS_SCRIPT_URL to your deployed Apps Script Web App /exec URL.
+ * Frontend runtime config.
+ * - Local/dev: set APPS_SCRIPT_URL manually in this file.
+ * - GitHub Pages workflow: this file is overwritten at deploy time from
+ *   environment secret APPS_SCRIPT_URL.
  */
 window.DIARY_APP_CONFIG = Object.assign(
   {
