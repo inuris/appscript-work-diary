@@ -1,11 +1,20 @@
 window.DiaryTransport = (function () {
   function createHttpTransport(baseUrl) {
+    console.info("[DiaryDebug] createHttpTransport baseUrl:", baseUrl);
+
     function parseJsonResponse(response) {
+      console.info(
+        "[DiaryDebug] HTTP response:",
+        response.status,
+        response.statusText,
+        response.url
+      );
       return response.text().then(function (text) {
         var data;
         try {
           data = JSON.parse(text);
         } catch (err) {
+          console.error("[DiaryDebug] JSON parse failed. Raw response:", text);
           throw new Error(
             "Server returned invalid JSON (first 300 chars): " +
               String(text || "").slice(0, 300)
@@ -21,6 +30,7 @@ window.DiaryTransport = (function () {
     }
 
     function post(action, payload) {
+      console.info("[DiaryDebug] POST action:", action, "payload:", payload);
       return fetch(baseUrl, {
         method: "POST",
         headers: { "Content-Type": "text/plain;charset=UTF-8" },
@@ -35,6 +45,8 @@ window.DiaryTransport = (function () {
 
     return {
       list: function () {
+        var url = baseUrl + "?action=list";
+        console.info("[DiaryDebug] GET list:", url);
         return fetch(baseUrl + "?action=list")
           .then(parseJsonResponse)
           .then(function (data) {
