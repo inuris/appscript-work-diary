@@ -21,30 +21,30 @@ jobs:
       name: work-diary
     steps:
       - name: Checkout
-      uses: actions/checkout@v4
+        uses: actions/checkout@v4
 
       - name: Build runtime config from environment secret
-      env:
-        APPS_SCRIPT_URL: ${{ secrets.APPS_SCRIPT_URL }}
-      run: |
-        test -n "$APPS_SCRIPT_URL" || (echo "Missing secret APPS_SCRIPT_URL in environment work-diary" && exit 1)
-        cat > config.js <<EOF
-        window.DIARY_APP_CONFIG = Object.assign(
-          {
-            APPS_SCRIPT_URL: "${APPS_SCRIPT_URL}"
-          },
-          window.DIARY_APP_CONFIG || {}
-        );
-        EOF
+        env:
+          APPS_SCRIPT_URL: ${{ secrets.APPS_SCRIPT_URL }}
+        run: |
+          test -n "$APPS_SCRIPT_URL" || (echo "Missing secret APPS_SCRIPT_URL in environment work-diary" && exit 1)
+          cat > config.js <<EOF
+          window.DIARY_APP_CONFIG = Object.assign(
+            {
+              APPS_SCRIPT_URL: "${APPS_SCRIPT_URL}"
+            },
+            window.DIARY_APP_CONFIG || {}
+          );
+          EOF
 
       - name: Setup Pages
-      uses: actions/configure-pages@v5
+        uses: actions/configure-pages@v5
 
       - name: Upload artifact
-      uses: actions/upload-pages-artifact@v3
-      with:
-        path: .
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: .
 
       - name: Deploy to GitHub Pages
-      id: deployment
-      uses: actions/deploy-pages@v4
+        id: deployment
+        uses: actions/deploy-pages@v4
