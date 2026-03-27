@@ -18,6 +18,7 @@ body {
   color: var(--text);
   line-height: 1.5;
   min-height: 100vh;
+  overflow-x: hidden;
 }
 .app-shell {
   display: flex;
@@ -36,6 +37,17 @@ body {
   align-self: flex-start;
   max-height: calc(100vh - 2rem);
   overflow-y: auto;
+}
+.mobile-toolbar {
+  display: none;
+}
+.mobile-menu-btn {
+  border: 1px solid #31507a;
+  background: transparent;
+  color: var(--text);
+  box-shadow: none;
+  font-size: 0.85rem;
+  padding: 0.45rem 0.7rem;
 }
 .sidebar-heading {
   margin: 0 0 0.75rem;
@@ -302,7 +314,7 @@ button.secondary {
 .summary { color: #d9e6fa; margin: 0.22rem 0 0.5rem; }
 .entry-title-line {
   font-size: 1.08rem;
-  font-weight: 650;
+  font-weight: 800;
   color: #e8f0fc;
   margin: 0.35rem 0 0.15rem;
   padding-right: 7rem;
@@ -319,6 +331,8 @@ button.secondary {
   margin-bottom: 0;
   padding-right: 7rem;
   color: #d7deea;
+  font-size: 0.9rem;
+  font-weight: 400;
 }
 .label-tip {
   display: flex;
@@ -594,51 +608,53 @@ pre {
 @media (max-width: 800px) {
   .app-shell {
     flex-direction: column;
-    padding: 0.75rem 0.75rem 5rem;
+    width: 100%;
+    max-width: 100%;
+    gap: 0.75rem;
+    padding: 0.75rem;
+  }
+  .mobile-toolbar {
+    display: block;
+    width: 100%;
+  }
+  .sidebar {
+    width: 100%;
+    display: none;
+    position: static;
+    top: auto;
+    max-height: 60vh;
+  }
+  .sidebar.open {
+    display: block;
   }
   .main-pane {
-    order: -1;
-  }
-  .main-title {
-    font-size: 1.15rem;
-    margin-bottom: 0.4rem;
-  }
-  .search-panel {
-    padding: 0.5rem 0.65rem;
-    margin-bottom: 0.5rem;
-  }
-  .search-panel label {
-    display: none;
-  }
-  .search-panel .row {
-    flex-wrap: nowrap;
-    gap: 0.4rem;
-  }
-  .search-panel .row > * {
+    width: 100%;
     min-width: 0;
   }
-  .search-panel input {
-    padding: 0.48rem 0.65rem;
-    font-size: 0.9rem;
+  .panel {
+    width: 100%;
+    max-width: 100%;
+    margin-left: 0;
+    margin-right: 0;
   }
   .entry {
-    padding: 0.65rem 0.75rem;
-    margin-top: 0.5rem;
+    width: 100%;
+    overflow-x: hidden;
   }
+  .entry-title-line,
   .entry-body {
-    padding-right: 6rem;
-    display: -webkit-box;
-    line-clamp: 3;
-    -webkit-line-clamp: 3;
-    -webkit-box-orient: vertical;
-    overflow: hidden;
+    padding-right: 0.4rem;
+    word-break: break-word;
   }
-  .entry-title-line {
-    padding-right: 6rem;
-    font-size: 1rem;
+  .entry-actions {
+    position: static;
+    margin-bottom: 0.5rem;
+    justify-content: flex-end;
   }
   .entry-list-scroll {
-    max-height: none;
+    max-height: calc(100vh - 12.5rem);
+    overflow-y: auto;
+    overflow-x: hidden;
   }
   .sidebar {
     position: fixed;
