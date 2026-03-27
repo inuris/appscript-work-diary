@@ -12,7 +12,7 @@
   <div id="app" class="app-shell">
     <aside id="app-sidebar" class="sidebar panel">
       <div class="sidebar-heading-wrap">
-        <h2 class="sidebar-heading">New entry</h2>
+        <h2 class="sidebar-heading">Add New</h2>
         <button
           type="button"
           id="sidebar-close-btn"
@@ -22,66 +22,26 @@
           Close
         </button>
       </div>
-      <label for="entry-title">Title</label>
-      <input id="entry-title" type="text" placeholder="Short title" />
-      <label for="entry-desc">Description</label>
-      <textarea id="entry-desc" class="sidebar-textarea" placeholder="Body text…"></textarea>
-      <div class="tags-field-wrap">
-        <label for="entry-tags" title="Comma-separated. Suggestions show most-used tags first.">Tags</label>
-        <input
-          id="entry-tags"
-          type="text"
-          placeholder="e.g. work, health"
-          list="tag-datalist"
-          autocomplete="off"
-        />
-        <datalist id="tag-datalist"></datalist>
-        <div id="tag-suggest-panel" class="tag-suggest-panel" hidden></div>
-      </div>
-      <div class="btn-row">
-        <button type="button" id="btn-save" disabled>Save</button>
-      </div>
       <p id="save-error" class="err" style="display: none"></p>
-
       <div class="sidebar-section import-block">
-        <label for="ai-diary-input" class="label-tip">
-          AI diary input
+        <label for="add-input" class="label-tip">
+          Input text
           <span
             class="tip-icon"
             tabindex="0"
             role="tooltip"
-            title="Paste free-form text (usually starts with diary input). Click Process with AI to auto-build logs JSON."
+            title="Rich text is recommended (headings, bullets, numbering). AI will split into entries, then extract raw_text, title, summary."
             >?</span
           >
         </label>
         <textarea
-          id="ai-diary-input"
+          id="add-input"
           class="import-textarea"
-          placeholder="Paste diary input text..."
-          rows="5"
+          placeholder="Paste plain text or rich text here..."
+          rows="10"
         ></textarea>
         <div class="btn-row">
-          <button type="button" id="btn-ai-process" disabled>Process with AI</button>
-        </div>
-
-        <label for="import-json" class="label-tip">
-          Import JSON
-          <span
-            class="tip-icon"
-            tabindex="0"
-            role="tooltip"
-            title="In Cursor, start a message with the keyword &quot;diary input&quot; so the AI returns import JSON (logs). Paste the result here — no need to edit the shape by hand."
-            >?</span
-          >
-        </label>
-        <textarea
-          id="import-json"
-          class="import-textarea"
-          placeholder="Paste JSON from AI (diary)"
-          rows="5"
-        ></textarea>
-        <div class="btn-row">
-          <button type="button" id="btn-import" disabled>Import</button>
+          <button type="button" id="btn-add" disabled>Add</button>
         </div>
       </div>
     </aside>
@@ -96,7 +56,7 @@
           aria-controls="app-sidebar"
           aria-expanded="false"
         >
-          Add new
+          Add
         </button>
       </div>
       <p id="runtime-warning" class="err" style="display: none"></p>
@@ -163,18 +123,25 @@
     <span class="sync-spinner" aria-hidden="true"></span>
   </div>
 
-  <div
-    id="import-modal"
-    class="modal-root"
-    hidden
-    aria-hidden="true"
-  >
+  <div id="import-modal" class="modal-root" hidden aria-hidden="true">
     <div class="modal-backdrop" data-close-modal></div>
     <div class="modal-dialog panel" role="dialog" aria-labelledby="import-modal-title">
       <h2 id="import-modal-title" class="modal-title">Import results</h2>
       <div id="import-modal-body"></div>
       <div class="btn-row modal-actions">
         <button type="button" class="secondary" data-close-modal>Close</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="preview-modal" class="modal-root" hidden aria-hidden="true">
+    <div class="modal-backdrop" data-close-preview></div>
+    <div class="modal-dialog panel" role="dialog" aria-labelledby="preview-modal-title">
+      <h2 id="preview-modal-title" class="modal-title">Preview entries from AI</h2>
+      <div id="preview-modal-body"></div>
+      <div class="btn-row modal-actions">
+        <button type="button" class="secondary" data-close-preview>Cancel</button>
+        <button type="button" id="preview-approve-btn">Approve</button>
       </div>
     </div>
   </div>

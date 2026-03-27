@@ -17,8 +17,9 @@ Put the **entire response** in **one** markdown fenced code block tagged as `jso
   "logs": [
     {
       "created_at": "YYYY-MM-DD HH:MM:SS",
-      "raw_text": "short title (search matches this first)",
-      "summary": "description / detail lines (search second); no repeated title phrases",
+      "raw_text": "raw text block for this entry (split first)",
+      "title": "processed short title",
+      "summary": "processed summary/description",
       "tags": ["lowercase-tag-1", "lowercase-tag-2"],
       "sentiment": "Positive|Negative|Neutral"
     }
@@ -31,10 +32,15 @@ Inside the fence, the payload must be **valid JSON only** (correct escaping, no 
 
 ## Constraints
 
-- **App field roles (for search / filter):** Local search checks **`raw_text` first**, then **`summary`**. Treat **`raw_text` as the title** (short headline) and **`summary` as the description** (rest of the detail). Prefer **`raw_text` shorter than `summary`** whenever there is extra content; do **not** repeat the same phrases in `summary` that already appear in `raw_text`.
+- **Split first, then extract:** First split the source text into multiple meaningful entries. Then for each entry, output:
+  - `raw_text`: the split raw block for that entry
+  - `title`: processed concise title
+  - `summary`: processed concise summary/description
+- **Search priority:** UI search prioritizes `raw_text`, then `title`, then `summary`.
 - **Split when possible:** Prefer several small `logs` objects when the input has separate items (numbered lists, menus, bullets, tasks, etc.). Example: a list of menus — **one `logs` entry per menu.**
-- **`raw_text` (title):** Required. The concise primary label for that item (e.g. menu name). Use the user’s wording; no paraphrase. Take it from the main heading (e.g. text after `Tên menu:`, or the standalone heading line). **Strip leading list markers** (`1-`, `2-`, `10-`, `1.`, `•`, etc.) — never start with those prefixes. Only the title belongs here, not the full pasted block.
-- **`summary` (description):** The remaining lines from that item (category, link/menu path, code, priority, `P/s`, etc.), **verbatim** aside from dropping duplication: omit any sentence or phrase that merely repeats the `raw_text` title. If there is nothing beyond the title, use `""`. Keep it factual; no filler words. Should usually be **longer than `raw_text`** when notes or metadata exist.
+- **`raw_text`:** Required. Keep the source content for each split entry with minimal normalization. Strip only obvious list markers at the start (`1-`, `2.`, `•`, etc.).
+- **`title`:** Required. Processed concise title derived from the entry.
+- **`summary`:** Required. Processed concise summary/description for the entry. Avoid repeating full title phrase.
 - `tags` should be lowercase, deduplicated, and max 12 per log.
 - `sentiment` must be exactly one of `Positive`, `Negative`, `Neutral`.
 - `created_at` is optional; if unknown, still keep key with best estimate in local time.

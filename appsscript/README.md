@@ -30,6 +30,16 @@ Apps Script is API-only now.
    - `APP_CONFIG.SHEET_GID`
 3. Deploy as Web App (`/exec` URL).
 
+Sheet columns (in order):
+
+- `Timestamp`
+- `created_at`
+- `raw_text`
+- `title`
+- `summary`
+- `tags`
+- `sentiment`
+
 ## Frontend wiring
 
 GitHub Pages frontend uses `config.js` with:

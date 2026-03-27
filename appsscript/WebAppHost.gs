@@ -86,7 +86,7 @@ function handleAiDiaryInput_(payload) {
     (rulePrompt ? rulePrompt + "\n\n" : "") +
     [
       "Task: convert the following diary input text to the diary import JSON schema.",
-      "Return JSON object with shape: {\"logs\":[...]}",
+      "Return JSON object with shape: {\"logs\":[...]} and each log should include raw_text, title, summary.",
       "Output requirements:",
       "- valid JSON only",
       "- no markdown or code fences",

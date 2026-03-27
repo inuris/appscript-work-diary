@@ -320,6 +320,11 @@ button.secondary {
   padding-right: 7rem;
   white-space: pre-wrap;
 }
+.entry-summary-line {
+  margin: 0.2rem 0 0.45rem;
+  color: #c8d5ea;
+  white-space: pre-wrap;
+}
 .entry-title-line.untitled {
   color: var(--muted);
   font-weight: 500;
@@ -447,6 +452,45 @@ button.secondary {
   margin-top: 0.75rem;
   font-size: 0.78rem;
   color: var(--muted);
+}
+.preview-table-wrap {
+  max-height: min(58vh, 620px);
+  overflow: auto;
+}
+.preview-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+.preview-table th,
+.preview-table td {
+  border: 1px solid var(--border);
+  padding: 0.4rem;
+  vertical-align: top;
+}
+.preview-table th {
+  background: rgba(16, 25, 40, 0.9);
+  color: var(--muted);
+  font-size: 0.72rem;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+}
+.preview-table textarea,
+.preview-table input[type="text"] {
+  width: 100%;
+  min-width: 220px;
+  background: #0b1323;
+  border: 1px solid var(--border);
+  color: var(--text);
+  border-radius: 8px;
+  padding: 0.45rem 0.55rem;
+}
+.preview-table textarea {
+  min-height: 84px;
+  resize: vertical;
+}
+.preview-delete {
+  border-color: #6f2f3d !important;
+  color: #ffc3cd !important;
 }
 .modal-subhead {
   margin: 1rem 0 0.5rem;

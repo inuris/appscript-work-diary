@@ -26,6 +26,7 @@
     }
     if (!Array.isArray(out.tags)) out.tags = [];
     if (out.raw_text != null) out.raw_text = normalizeLineEndings(out.raw_text);
+    if (out.title != null) out.title = normalizeLineEndings(out.title);
     if (out.summary != null) out.summary = normalizeLineEndings(out.summary);
     return out;
   }
@@ -154,8 +155,10 @@
   function enrichEntry(e) {
     var ne = normalizeEntry(e);
     var raw = ne.raw_text || "";
+    var title = ne.title || "";
     var summary = ne.summary || "";
     var rawL = raw.toLowerCase();
+    var titleL = title.toLowerCase();
     var sumL = summary.toLowerCase();
     var tags = ne.tags || [];
     var tagsJoined = tags
@@ -168,6 +171,9 @@
       _rawLower: rawL,
       _rawNonAccent: trimAccent(rawL),
       _rawNaMap: buildNonAccentIndexMap(raw),
+      _titleLower: titleL,
+      _titleNonAccent: trimAccent(titleL),
+      _titleNaMap: buildNonAccentIndexMap(title),
       _summaryLower: sumL,
       _summaryNonAccent: trimAccent(sumL),
       _summaryNaMap: buildNonAccentIndexMap(summary),
@@ -180,11 +186,23 @@
   function matchDiaryKeyword(keyword, d) {
     var keywordNonAccent = trimAccent(keyword);
     var raw = d.raw_text || "";
+    var title = d.title || "";
     var index = d._rawLower.indexOf(keyword);
     if (index >= 0) {
       return {
         prior: 4,
         rawHtml: formatText(raw, index, index + keyword.length),
+        titleHtml: formatText(title || ""),
+        summaryHtml: formatText(d.summary || ""),
+        tagSpans: formatTagsPlain(d.tags),
+      };
+    }
+    index = d._titleLower.indexOf(keyword);
+    if (index >= 0) {
+      return {
+        prior: 3,
+        rawHtml: formatText(raw),
+        titleHtml: formatText(title || "", index, index + keyword.length),
         summaryHtml: formatText(d.summary || ""),
         tagSpans: formatTagsPlain(d.tags),
       };
@@ -192,8 +210,9 @@
     index = d._summaryLower.indexOf(keyword);
     if (index >= 0) {
       return {
-        prior: 3,
+        prior: 2,
         rawHtml: formatText(raw),
+        titleHtml: formatText(title || ""),
         summaryHtml: formatText(d.summary || "", index, index + keyword.length),
         tagSpans: formatTagsPlain(d.tags),
       };
@@ -201,8 +220,9 @@
     index = d._tagsLower.indexOf(keyword);
     if (index >= 0) {
       return {
-        prior: 3,
+        prior: 2,
         rawHtml: formatText(raw),
+        titleHtml: formatText(title || ""),
         summaryHtml: formatText(d.summary || ""),
         tagSpans: formatTagsLowerMatch(d.tags, keyword),
       };
@@ -216,6 +236,21 @@
       return {
         prior: 2,
         rawHtml: formatText(raw, startR, endR),
+        titleHtml: formatText(title || ""),
+        summaryHtml: formatText(d.summary || ""),
+        tagSpans: formatTagsPlain(d.tags),
+      };
+    }
+    index = d._titleNonAccent.indexOf(keywordNonAccent);
+    if (index >= 0) {
+      var mapT = d._titleNaMap;
+      var startT = mapT[index];
+      var endT =
+        mapT[Math.min(index + keywordNonAccent.length - 1, mapT.length - 1)] + 1;
+      return {
+        prior: 1,
+        rawHtml: formatText(raw),
+        titleHtml: formatText(title || "", startT, endT),
         summaryHtml: formatText(d.summary || ""),
         tagSpans: formatTagsPlain(d.tags),
       };
@@ -230,6 +265,7 @@
       return {
         prior: 1,
         rawHtml: formatText(raw),
+        titleHtml: formatText(title || ""),
         summaryHtml: formatText(sum, startS, endS),
         tagSpans: formatTagsPlain(d.tags),
       };
@@ -237,13 +273,14 @@
     index = d._tagsNonAccent.indexOf(keywordNonAccent);
     if (index >= 0) {
       return {
-        prior: 1,
+        prior: 0,
         rawHtml: formatText(raw),
+        titleHtml: formatText(title || ""),
         summaryHtml: formatText(d.summary || ""),
         tagSpans: formatTagsNonAccentMatch(d.tags, keywordNonAccent),
       };
     }
-    return { prior: 0, rawHtml: "", summaryHtml: "", tagSpans: [] };
+    return { prior: 0, rawHtml: "", titleHtml: "", summaryHtml: "", tagSpans: [] };
   }
 
   function passesTagFilter(d, tagLower) {
@@ -268,6 +305,7 @@
           prior: 0,
           entry: enriched,
           rawHtml: formatText(enriched.raw_text || ""),
+          titleHtml: enriched.title ? formatText(enriched.title) : "",
           summaryHtml: enriched.summary ? formatText(enriched.summary) : "",
           tagSpans: formatTagsPlain(enriched.tags),
         });
@@ -279,6 +317,7 @@
         prior: m.prior,
         entry: enriched,
         rawHtml: m.rawHtml,
+        titleHtml: m.titleHtml,
         summaryHtml: m.summaryHtml,
         tagSpans: m.tagSpans,
       });
@@ -475,12 +514,6 @@
     return Object.keys(S.selectedIds)
       .filter(function (k) {
         return S.selectedIds[k];
-      })
-      .map(function (k) {
-        return Number(k);
-      })
-      .filter(function (n) {
-        return !isNaN(n);
       });
   }
 
@@ -583,8 +616,9 @@
         .then(function () {
           S.selectedIds = {};
           S.editingId = null;
-          S.editDraft = "";
+          S.editRaw = "";
           S.editTitle = "";
+          S.editSummary = "";
           S.editTags = "";
           return loadEntries();
         })
@@ -637,10 +671,12 @@
     saveInFlight: false,
     importInFlight: false,
     aiInFlight: false,
+    approveInFlight: false,
     editInFlight: false,
     editingId: null,
-    editDraft: "",
+    editRaw: "",
     editTitle: "",
+    editSummary: "",
     editTags: "",
     loading: false,
     tagMenu: {
@@ -650,6 +686,7 @@
       entryId: null,
       phrase: "",
     },
+    previewRows: [],
   };
 
   function applyLocalFilter() {
@@ -723,11 +760,11 @@
   }
 
   function syncAiProcessButton() {
-    var btn = $("btn-ai-process");
-    var ta = $("ai-diary-input");
+    var btn = $("btn-add");
+    var ta = $("add-input");
     if (!btn || !ta) return;
-    btn.disabled = S.aiInFlight || isEffectivelyEmptyText(ta.value);
-    btn.textContent = S.aiInFlight ? "Processing..." : "Process with AI";
+    btn.disabled = S.aiInFlight || S.approveInFlight || isEffectivelyEmptyText(ta.value);
+    btn.textContent = S.aiInFlight ? "Processing..." : "Add";
   }
 
   function stripDiaryInputPrefix(text) {
@@ -754,12 +791,63 @@
       });
   }
 
+  function normalizePreviewRows(logs) {
+    return (logs || []).map(function (x) {
+      return {
+        created_at: normalizeLineEndings(x.created_at || ""),
+        raw_text: normalizeLineEndings(x.raw_text || ""),
+        title: normalizeLineEndings(x.title || ""),
+        summary: normalizeLineEndings(x.summary || ""),
+        tags: Array.isArray(x.tags) ? x.tags : [],
+        sentiment: x.sentiment || "Neutral",
+      };
+    }).filter(function (x) {
+      return !isEffectivelyEmptyText(x.raw_text);
+    });
+  }
+
+  function paintPreviewModal() {
+    var body = $("preview-modal-body");
+    if (!body) return;
+    if (!S.previewRows.length) {
+      body.innerHTML = '<p class="empty">No rows to approve.</p>';
+      return;
+    }
+    var html = '<div class="preview-table-wrap"><table class="preview-table"><thead><tr>' +
+      '<th>#</th><th>Raw Text</th><th>Title</th><th>Summary</th><th></th></tr></thead><tbody>';
+    for (var i = 0; i < S.previewRows.length; i++) {
+      var r = S.previewRows[i];
+      html += '<tr data-preview-row="' + i + '">' +
+        '<td>' + (i + 1) + '</td>' +
+        '<td><textarea data-preview-raw>' + escapeHtml(r.raw_text) + '</textarea></td>' +
+        '<td><input type="text" data-preview-title value="' + escapeAttr(r.title) + '"></td>' +
+        '<td><textarea data-preview-summary>' + escapeHtml(r.summary) + '</textarea></td>' +
+        '<td><button type="button" class="secondary preview-delete" data-preview-delete>×</button></td>' +
+        '</tr>';
+    }
+    html += '</tbody></table></div>';
+    body.innerHTML = html;
+  }
+
+  function openPreviewModal() {
+    var root = $("preview-modal");
+    if (!root) return;
+    paintPreviewModal();
+    root.hidden = false;
+    root.setAttribute("aria-hidden", "false");
+  }
+
+  function closePreviewModal() {
+    var root = $("preview-modal");
+    if (!root) return;
+    root.hidden = true;
+    root.setAttribute("aria-hidden", "true");
+  }
+
   function processDiaryInputWithAi() {
-    var inputEl = $("ai-diary-input");
-    var outEl = $("import-json");
+    var inputEl = $("add-input");
     if (
       !inputEl ||
-      !outEl ||
       !S.transport ||
       typeof S.transport.aiDiaryInput !== "function"
     ) {
@@ -788,10 +876,10 @@
         });
       })
       .then(function (res) {
-        var logs = Array.isArray(res.logs) ? res.logs : [];
-        if (!logs.length) throw new Error("AI returned empty logs");
-        outEl.value = JSON.stringify({ logs: logs }, null, 2);
-        syncImportButton();
+        var rows = normalizePreviewRows(res.logs);
+        if (!rows.length) throw new Error("AI returned empty rows");
+        S.previewRows = rows;
+        openPreviewModal();
       })
       .catch(function (err) {
         setSaveError((err && err.message) || "AI processing failed");
@@ -799,6 +887,40 @@
       .finally(function () {
         endSync();
         S.aiInFlight = false;
+        syncAiProcessButton();
+      });
+  }
+
+  function approvePreviewRows() {
+    if (!S.previewRows.length || !S.transport || S.approveInFlight) return;
+    S.approveInFlight = true;
+    beginSync();
+    setSaveError("");
+    var approveBtn = $("preview-approve-btn");
+    if (approveBtn) {
+      approveBtn.disabled = true;
+      approveBtn.textContent = "Saving...";
+    }
+    S.transport
+      .importLogs({ logs: S.previewRows })
+      .then(function (data) {
+        var inputEl = $("add-input");
+        if (inputEl) inputEl.value = "";
+        S.previewRows = [];
+        closePreviewModal();
+        openImportModal(data);
+        return loadEntries();
+      })
+      .catch(function (err) {
+        setSaveError((err && err.message) || "Approve failed");
+      })
+      .finally(function () {
+        endSync();
+        S.approveInFlight = false;
+        if (approveBtn) {
+          approveBtn.disabled = false;
+          approveBtn.textContent = "Approve";
+        }
         syncAiProcessButton();
       });
   }
@@ -854,12 +976,15 @@
             "></label>"
         );
         parts.push("</div>");
-        parts.push('<div class="entry-body">' + item.rawHtml + "</div>");
-        if (e.summary) {
-          parts.push('<div class="entry-title-line">' + item.summaryHtml + "</div>");
+        if (e.title) {
+          parts.push('<div class="entry-title-line">' + item.titleHtml + "</div>");
         } else {
           parts.push('<div class="entry-title-line untitled">Untitled</div>');
         }
+        if (e.summary) {
+          parts.push('<div class="entry-summary-line">' + item.summaryHtml + "</div>");
+        }
+        parts.push('<div class="entry-body">' + item.rawHtml + "</div>");
         if (item.tagSpans && item.tagSpans.length) {
           parts.push('<div class="tags">');
           var ti;
@@ -885,8 +1010,13 @@
             '">'
         );
         parts.push(
-          '<label style="margin-top:0.5rem">Description</label><textarea data-edit-desc>' +
-            escapeHtml(S.editDraft) +
+          '<label style="margin-top:0.5rem">Raw text</label><textarea data-edit-raw>' +
+            escapeHtml(S.editRaw) +
+            "</textarea>"
+        );
+        parts.push(
+          '<label style="margin-top:0.5rem">Summary</label><textarea data-edit-summary>' +
+            escapeHtml(S.editSummary) +
             "</textarea>"
         );
         parts.push(
@@ -897,7 +1027,7 @@
         parts.push('<div class="btn-row">');
         parts.push(
           '<button type="button" data-action="save-edit" id="btn-save-edit" ' +
-            (S.editInFlight || isEffectivelyEmptyText(S.editDraft) ? "disabled" : "") +
+            (S.editInFlight || isEffectivelyEmptyText(S.editRaw) ? "disabled" : "") +
             ">" +
             (S.editInFlight ? "Saving…" : "Save Edit") +
             "</button>"
@@ -916,10 +1046,10 @@
   }
 
   function getEntryById(id) {
-    var target = Number(id);
+    var target = String(id || "");
     var i;
     for (i = 0; i < S.fullData.length; i++) {
-      if (Number(S.fullData[i].id) === target) return S.fullData[i];
+      if (String(S.fullData[i].id) === target) return S.fullData[i];
     }
     return null;
   }
@@ -982,8 +1112,9 @@
       var ent = getEntryById(id);
       if (ent) {
         S.editingId = ent.id;
-        S.editDraft = ent.raw_text || "";
-        S.editTitle = ent.summary || "";
+        S.editRaw = ent.raw_text || "";
+        S.editTitle = ent.title || "";
+        S.editSummary = ent.summary || "";
         S.editTags = (ent.tags || []).join(", ");
         paintEntryList();
       }
@@ -1005,8 +1136,9 @@
     }
     if (action === "cancel-edit") {
       S.editingId = null;
-      S.editDraft = "";
+      S.editRaw = "";
       S.editTitle = "";
+      S.editSummary = "";
       S.editTags = "";
       paintEntryList();
       return;
@@ -1015,12 +1147,14 @@
 
   function onEntryListInput(ev) {
     var t = ev.target;
-    if (t.getAttribute("data-edit-desc")) {
-      S.editDraft = t.value;
+    if (t.getAttribute("data-edit-raw")) {
+      S.editRaw = t.value;
       var b = $("btn-save-edit");
-      if (b) b.disabled = S.editBusy || isEffectivelyEmptyText(S.editDraft);
+      if (b) b.disabled = S.editBusy || isEffectivelyEmptyText(S.editRaw);
     } else if (t.getAttribute("data-edit-title")) {
       S.editTitle = t.value;
+    } else if (t.getAttribute("data-edit-summary")) {
+      S.editSummary = t.value;
     } else if (t.getAttribute("data-edit-tags")) {
       S.editTags = t.value;
     }
@@ -1089,11 +1223,12 @@
   }
 
   function updateEntry() {
-    if (!S.editingId || isEffectivelyEmptyText(S.editDraft) || !S.transport) return;
+    if (!S.editingId || isEffectivelyEmptyText(S.editRaw) || !S.transport) return;
     if (S.editInFlight) return;
     var id = S.editingId;
-    var draft = normalizeLineEndings(S.editDraft);
+    var raw = normalizeLineEndings(S.editRaw);
     var title = normalizeLineEndings(S.editTitle || "");
+    var summary = normalizeLineEndings(S.editSummary || "");
     var tags = parseTagsFromInput(S.editTags);
     S.editInFlight = true;
     paintEntryList();
@@ -1102,14 +1237,16 @@
     S.transport
       .update({
         id: id,
-        raw_text: draft,
-        summary: title,
+        raw_text: raw,
+        title: title,
+        summary: summary,
         tags: tags,
       })
       .then(function () {
         S.editingId = null;
-        S.editDraft = "";
+        S.editRaw = "";
         S.editTitle = "";
+        S.editSummary = "";
         S.editTags = "";
         return loadEntries();
       })
@@ -1172,10 +1309,11 @@
     S.transport
       .remove({ id: id })
       .then(function () {
-        if (S.editingId === Number(id) || String(S.editingId) === String(id)) {
+        if (String(S.editingId) === String(id)) {
           S.editingId = null;
-          S.editDraft = "";
+          S.editRaw = "";
           S.editTitle = "";
+          S.editSummary = "";
           S.editTags = "";
         }
         delete S.selectedIds[String(id)];
@@ -1234,7 +1372,7 @@
   }
 
   function closeSidebarSheet() {
-    var sb = $("sidebar");
+    var sb = $("app-sidebar");
     var bd = $("sidebar-backdrop");
     if (sb) sb.classList.remove("sidebar-open");
     if (bd) bd.classList.remove("visible");
@@ -1255,7 +1393,10 @@
       closes[i].addEventListener("click", closeImportModal);
     }
     document.addEventListener("keydown", function (e) {
-      if (e.key === "Escape") closeImportModal();
+      if (e.key === "Escape") {
+        closeImportModal();
+        closePreviewModal();
+      }
     });
   }
 
@@ -1290,46 +1431,45 @@
     }
     var sc = $("search-clear");
     if (sc) sc.addEventListener("click", clearSearch);
-    var bs = $("btn-save");
-    if (bs) bs.addEventListener("click", function () { void saveEntry(); });
-    var et = $("entry-title");
-    var ed = $("entry-desc");
-    var eTags = $("entry-tags");
-    if (et) et.addEventListener("input", syncSaveButton);
-    if (ed) ed.addEventListener("input", syncSaveButton);
-    if (eTags) {
-      eTags.addEventListener("focus", renderTagSuggest);
-      eTags.addEventListener("input", renderTagSuggest);
-      eTags.addEventListener("blur", function () {
-        setTimeout(function () {
-          var panel = $("tag-suggest-panel");
-          if (panel) {
-            panel.hidden = true;
-          }
-        }, 180);
-      });
-    }
-    var panel = $("tag-suggest-panel");
-    if (panel) {
-      panel.addEventListener("mousedown", function (e) {
-        var b = e.target.closest("[data-suggest-tag]");
-        if (!b) return;
-        e.preventDefault();
-        insertTagSuggestion(b.getAttribute("data-suggest-tag"));
-      });
-    }
-    var bi = $("btn-import");
-    var ij = $("import-json");
-    if (bi) bi.addEventListener("click", function () { void importLogs(); });
-    if (ij) ij.addEventListener("input", syncImportButton);
-    var aiBtn = $("btn-ai-process");
-    var aiIn = $("ai-diary-input");
+    var aiBtn = $("btn-add");
+    var aiIn = $("add-input");
     if (aiBtn) {
       aiBtn.addEventListener("click", function () {
         void processDiaryInputWithAi();
       });
     }
     if (aiIn) aiIn.addEventListener("input", syncAiProcessButton);
+    var previewRoot = $("preview-modal-body");
+    if (previewRoot) {
+      previewRoot.addEventListener("input", function (ev) {
+        var row = ev.target.closest("[data-preview-row]");
+        if (!row) return;
+        var idx = Number(row.getAttribute("data-preview-row"));
+        if (isNaN(idx) || !S.previewRows[idx]) return;
+        if (ev.target.hasAttribute("data-preview-raw")) {
+          S.previewRows[idx].raw_text = ev.target.value;
+        } else if (ev.target.hasAttribute("data-preview-title")) {
+          S.previewRows[idx].title = ev.target.value;
+        } else if (ev.target.hasAttribute("data-preview-summary")) {
+          S.previewRows[idx].summary = ev.target.value;
+        }
+      });
+      previewRoot.addEventListener("click", function (ev) {
+        if (!ev.target.hasAttribute("data-preview-delete")) return;
+        var row = ev.target.closest("[data-preview-row]");
+        if (!row) return;
+        var idx = Number(row.getAttribute("data-preview-row"));
+        if (isNaN(idx)) return;
+        S.previewRows.splice(idx, 1);
+        paintPreviewModal();
+      });
+    }
+    var approveBtn = $("preview-approve-btn");
+    if (approveBtn) approveBtn.addEventListener("click", function () { void approvePreviewRows(); });
+    var previewCloses = document.querySelectorAll("[data-close-preview]");
+    for (var pci = 0; pci < previewCloses.length; pci++) {
+      previewCloses[pci].addEventListener("click", closePreviewModal);
+    }
     var ctx = $("ctx-menu");
     if (ctx) {
       ctx.addEventListener("click", function (e) {
@@ -1347,7 +1487,7 @@
     var sidebarBackdrop = $("sidebar-backdrop");
     if (fab) {
       fab.addEventListener("click", function () {
-        var sb = $("sidebar");
+        var sb = $("app-sidebar");
         if (!sb || !sidebarBackdrop) return;
         var isOpen = sb.classList.contains("sidebar-open");
         if (isOpen) {
@@ -1365,8 +1505,8 @@
     window.addEventListener("resize", closeTagMenu);
     bindModal();
 
-    var menuBtn = $("mobile-menu-btn");
-    var sidebar = $("new-entry-sidebar");
+    var menuBtn = $("mobile-menu-toggle");
+    var sidebar = $("app-sidebar");
     if (menuBtn && sidebar) {
       menuBtn.addEventListener("click", function () {
         var open = sidebar.classList.toggle("mobile-open");
