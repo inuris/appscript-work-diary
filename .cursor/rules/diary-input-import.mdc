@@ -9,28 +9,35 @@ When the user message starts with `diary input`, convert the provided text into 
 
 ## Required Output Format
 
-Return ONLY valid JSON (no markdown fences, no prose):
+Put the **entire response** in **one** markdown fenced code block tagged as `json` so it is easy to copy from the editor (no prose or commentary outside that block).
 
+````markdown
 ```json
 {
   "logs": [
     {
       "created_at": "YYYY-MM-DD HH:MM:SS",
-      "raw_text": "verbatim user text — keep unchanged",
-      "summary": "minimal rewrite, no filler",
+      "raw_text": "short title (search matches this first)",
+      "summary": "description / detail lines (search second); no repeated title phrases",
       "tags": ["lowercase-tag-1", "lowercase-tag-2"],
       "sentiment": "Positive|Negative|Neutral"
     }
   ]
 }
 ```
+````
+
+Inside the fence, the payload must be **valid JSON only** (correct escaping, no comments).
 
 ## Constraints
 
-- `raw_text` is required: keep the user’s wording/content as given (verbatim); do not paraphrase or embellish.
-- `summary` must stay faithful to what happened; if you shorten it, make it as short as possible — no filler, hedging, or extra words.
+- **App field roles (for search / filter):** Local search checks **`raw_text` first**, then **`summary`**. Treat **`raw_text` as the title** (short headline) and **`summary` as the description** (rest of the detail). Prefer **`raw_text` shorter than `summary`** whenever there is extra content; do **not** repeat the same phrases in `summary` that already appear in `raw_text`.
+- **Split when possible:** Prefer several small `logs` objects when the input has separate items (numbered lists, menus, bullets, tasks, etc.). Example: a list of menus — **one `logs` entry per menu.**
+- **`raw_text` (title):** Required. The concise primary label for that item (e.g. menu name). Use the user’s wording; no paraphrase. Take it from the main heading (e.g. text after `Tên menu:`, or the standalone heading line). **Strip leading list markers** (`1-`, `2-`, `10-`, `1.`, `•`, etc.) — never start with those prefixes. Only the title belongs here, not the full pasted block.
+- **`summary` (description):** The remaining lines from that item (category, link/menu path, code, priority, `P/s`, etc.), **verbatim** aside from dropping duplication: omit any sentence or phrase that merely repeats the `raw_text` title. If there is nothing beyond the title, use `""`. Keep it factual; no filler words. Should usually be **longer than `raw_text`** when notes or metadata exist.
 - `tags` should be lowercase, deduplicated, and max 12 per log.
 - `sentiment` must be exactly one of `Positive`, `Negative`, `Neutral`.
 - `created_at` is optional; if unknown, still keep key with best estimate in local time.
-- If multiple diary moments exist, split into multiple objects in `logs`.
+- If the input is a single moment with no natural splits, a single object in `logs` is fine.
 - Do not add extra keys outside this schema.
+- **Copy-friendly output:** The model’s reply must be **only** one markdown code fence labeled `json` wrapping the payload (no surrounding prose), so the block can be copied in one action.
