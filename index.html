@@ -10,9 +10,18 @@
   <script src="config.js"></script>
 
   <div id="app" class="app-shell">
-    <aside id="sidebar" class="sidebar panel">
-      <div class="sidebar-drag-handle" aria-hidden="true"></div>
-      <h2 class="sidebar-heading">New entry</h2>
+    <aside id="app-sidebar" class="sidebar panel">
+      <div class="sidebar-heading-wrap">
+        <h2 class="sidebar-heading">New entry</h2>
+        <button
+          type="button"
+          id="sidebar-close-btn"
+          class="secondary sidebar-close-btn"
+          aria-label="Close new entry panel"
+        >
+          Close
+        </button>
+      </div>
       <label for="entry-title">Title</label>
       <input id="entry-title" type="text" placeholder="Short title" />
       <label for="entry-desc">Description</label>
@@ -78,7 +87,18 @@
     </aside>
 
     <main class="main-pane">
-      <h1 class="main-title">Diary</h1>
+      <div class="main-title-row">
+        <h1 class="main-title">Diary</h1>
+        <button
+          type="button"
+          id="mobile-menu-toggle"
+          class="secondary mobile-menu-btn"
+          aria-controls="app-sidebar"
+          aria-expanded="false"
+        >
+          Add new
+        </button>
+      </div>
       <p id="runtime-warning" class="err" style="display: none"></p>
 
       <section class="panel search-panel">
@@ -158,6 +178,8 @@
       </div>
     </div>
   </div>
+
+  <div id="mobile-sidebar-backdrop" class="mobile-sidebar-backdrop" hidden></div>
 
   <script src="transport.js"></script>
   <script src="app.js"></script>

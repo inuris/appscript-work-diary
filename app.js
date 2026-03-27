@@ -1364,6 +1364,15 @@
     window.addEventListener("scroll", closeTagMenu, true);
     window.addEventListener("resize", closeTagMenu);
     bindModal();
+
+    var menuBtn = $("mobile-menu-btn");
+    var sidebar = $("new-entry-sidebar");
+    if (menuBtn && sidebar) {
+      menuBtn.addEventListener("click", function () {
+        var open = sidebar.classList.toggle("mobile-open");
+        menuBtn.setAttribute("aria-expanded", open ? "true" : "false");
+      });
+    }
   }
 
   function init() {
