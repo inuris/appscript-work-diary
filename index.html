@@ -10,7 +10,8 @@
   <script src="config.js"></script>
 
   <div id="app" class="app-shell">
-    <aside class="sidebar panel">
+    <aside id="sidebar" class="sidebar panel">
+      <div class="sidebar-drag-handle" aria-hidden="true"></div>
       <h2 class="sidebar-heading">New entry</h2>
       <label for="entry-title">Title</label>
       <input id="entry-title" type="text" placeholder="Short title" />
@@ -140,5 +141,8 @@
 
   <script src="transport.js"></script>
   <script src="app.js"></script>
+
+  <div id="sidebar-backdrop" class="sidebar-backdrop"></div>
+  <button id="fab-new" class="fab-new" type="button" aria-label="New entry">+</button>
 </body>
 </html>
