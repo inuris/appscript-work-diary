@@ -1,4 +1,3 @@
-<style>
 :root {
   --bg: #0b1220;
   --surface: #111a2b;
@@ -82,15 +81,19 @@ body {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 0.65rem 1rem;
-  margin-bottom: 0.75rem;
-  padding: 0.65rem 0.85rem;
+  gap: 0.35rem 0.6rem;
+  margin-bottom: 0.45rem;
+  padding: 0.32rem 0.55rem;
+}
+.bulk-bar.panel {
+  padding: 0.32rem 0.55rem;
+  margin-bottom: 0.45rem;
 }
 .bulk-bar .bulk-select-all {
   display: flex;
   align-items: center;
-  gap: 0.4rem;
-  font-size: 0.85rem;
+  gap: 0.3rem;
+  font-size: 0.76rem;
   color: var(--text);
   cursor: pointer;
   margin: 0;
@@ -98,19 +101,30 @@ body {
   letter-spacing: normal;
 }
 .bulk-muted {
-  font-size: 0.82rem;
+  font-size: 0.74rem;
   color: var(--muted);
+  min-width: 1rem;
+  text-align: center;
 }
 .bulk-actions {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 0.5rem;
+  gap: 0.35rem;
   margin-left: auto;
 }
 .bulk-actions input[type="text"] {
-  width: 160px;
-  min-width: 120px;
+  width: 120px;
+  min-width: 72px;
+  padding: 0.28rem 0.45rem;
+  font-size: 0.78rem;
+}
+.bulk-bar .bulk-action-btn {
+  padding: 0.28rem 0.55rem;
+  font-size: 0.76rem;
+  font-weight: 600;
+  box-shadow: none;
+  border-radius: 8px;
 }
 .bulk-delete-btn {
   border-color: #6f2f3d !important;
@@ -118,12 +132,23 @@ body {
 }
 .entry-select-wrap {
   flex-shrink: 0;
-  padding-top: 0.45rem;
   cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  margin: 0;
+  box-sizing: border-box;
+  border-radius: 8px;
+  background: #18263d;
+  border: 1px solid #284062;
+  padding: 0;
 }
 .entry-select-wrap input {
-  width: 1.05rem;
-  height: 1.05rem;
+  width: 0.95rem;
+  height: 0.95rem;
+  margin: 0;
   accent-color: var(--accent);
   cursor: pointer;
 }
@@ -239,9 +264,7 @@ button.secondary {
   box-shadow: none;
 }
 .entry {
-  display: flex;
-  gap: 0.65rem;
-  align-items: flex-start;
+  display: block;
   position: relative;
   margin-top: 0.8rem;
   padding: 0.95rem;
@@ -281,8 +304,8 @@ button.secondary {
   font-size: 1.08rem;
   font-weight: 650;
   color: #e8f0fc;
-  margin: 0.15rem 0 0.35rem;
-  padding-right: 4rem;
+  margin: 0.35rem 0 0.15rem;
+  padding-right: 7rem;
   white-space: pre-wrap;
 }
 .entry-title-line.untitled {
@@ -292,7 +315,9 @@ button.secondary {
 }
 .entry-body {
   white-space: pre-wrap;
-  margin-top: 0.35rem;
+  margin-top: 0;
+  margin-bottom: 0;
+  padding-right: 7rem;
   color: #d7deea;
 }
 .label-tip {
@@ -543,4 +568,3 @@ pre {
     max-height: none;
   }
 }
-</style>

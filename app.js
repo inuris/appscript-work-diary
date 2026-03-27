@@ -1,8 +1,14 @@
-<!-- DiaryUiVanilla — layout: sidebar (new entry + import) / main (search + list). -->
-<script>
 (function () {
   function $(id) {
     return document.getElementById(id);
+  }
+
+  function debugLog(message, detail) {
+    if (detail === undefined) {
+      console.log("[DiaryDebug] " + message);
+      return;
+    }
+    console.log("[DiaryDebug] " + message, detail);
   }
 
   function getAppScriptBaseUrl() {
@@ -10,14 +16,6 @@
     return String(cfg.APPS_SCRIPT_URL || "")
       .trim()
       .replace(/\/$/, "");
-  }
-
-  function isGasHosted() {
-    return (
-      typeof google !== "undefined" &&
-      google.script &&
-      typeof google.script.run !== "undefined"
-    );
   }
 
   function normalizeEntry(e) {
@@ -94,12 +92,10 @@
       .replace(/'/g, "&#39;");
   }
 
-  /** Normalize CRLF/CR to LF for sheet cells, imports, and textareas. */
   function normalizeLineEndings(text) {
     return String(text || "").replace(/\r\n/g, "\n").replace(/\r/g, "\n");
   }
 
-  /** True when there is no non-whitespace character (for “is this entry / field empty?”). */
   function isEffectivelyEmptyText(text) {
     return !/[^\s\u00A0]/.test(normalizeLineEndings(text));
   }
@@ -162,9 +158,11 @@
     var rawL = raw.toLowerCase();
     var sumL = summary.toLowerCase();
     var tags = ne.tags || [];
-    var tagsJoined = tags.map(function (t) {
-      return String(t);
-    }).join(" ");
+    var tagsJoined = tags
+      .map(function (t) {
+        return String(t);
+      })
+      .join(" ");
     var tagsL = tagsJoined.toLowerCase();
     return Object.assign({}, ne, {
       _rawLower: rawL,
@@ -294,21 +292,6 @@
     return out;
   }
 
-  function formatDate(iso) {
-    if (!iso) return "";
-    var normalized =
-      String(iso).indexOf("T") >= 0
-        ? iso
-        : String(iso).replace(" ", "T") + "Z";
-    var d = new Date(normalized);
-    if (Number.isNaN(d.getTime())) return iso;
-    return d.toLocaleString("vi-VN", {
-      timeZone: "Asia/Ho_Chi_Minh",
-      dateStyle: "medium",
-      timeStyle: "short",
-    });
-  }
-
   function rebuildTagCatalog() {
     var counts = {};
     var i;
@@ -358,9 +341,11 @@
       return;
     }
     var frag = getTagPrefixForSuggest(el);
-    var list = S.tagCatalog.filter(function (p) {
-      return !frag || p.tag.indexOf(frag) === 0;
-    }).slice(0, 12);
+    var list = S.tagCatalog
+      .filter(function (p) {
+        return !frag || p.tag.indexOf(frag) === 0;
+      })
+      .slice(0, 12);
     if (!list.length) {
       panel.hidden = true;
       panel.innerHTML = "";
@@ -398,11 +383,13 @@
     var root = $("import-modal");
     var body = $("import-modal-body");
     if (!root || !body) return;
-    var totalTry =
-      (data.imported_count || 0) + (data.error_count || 0);
+    var totalTry = (data.imported_count || 0) + (data.error_count || 0);
     var rows = [
       ["Rows processed", String(totalTry)],
-      ["Imported OK", String(data.imported_count != null ? data.imported_count : "—")],
+      [
+        "Imported OK",
+        String(data.imported_count != null ? data.imported_count : "—"),
+      ],
       ["Failed", String(data.error_count != null ? data.error_count : "—")],
     ];
     var html =
@@ -514,7 +501,8 @@
     var label = $("bulk-selected-label");
     var ids = getSelectedIdsArray();
     if (label) {
-      label.textContent = ids.length ? ids.length + " selected" : "None selected";
+      label.textContent = ids.length ? String(ids.length) : "—";
+      label.title = ids.length ? ids.length + " selected" : "None selected";
     }
     var allCb = $("bulk-select-all");
     if (allCb) {
@@ -555,9 +543,11 @@
       var idStrs = S.viewRows.map(function (r) {
         return String(r.entry.id);
       });
-      var allOn = idStrs.length && idStrs.every(function (x) {
-        return S.selectedIds[x];
-      });
+      var allOn =
+        idStrs.length &&
+        idStrs.every(function (x) {
+          return S.selectedIds[x];
+        });
       var someOn = idStrs.some(function (x) {
         return S.selectedIds[x];
       });
@@ -612,9 +602,7 @@
     var tag = inp ? normalizeBulkTag(inp.value) : "";
     if (!ids.length || !tag || !S.transport) return;
     if (
-      !confirm(
-        'Add tag "' + tag + '" to ' + ids.length + " selected entries?"
-      )
+      !confirm('Add tag "' + tag + '" to ' + ids.length + " selected entries?")
     ) {
       return;
     }
@@ -676,13 +664,14 @@
     var loading = S.loading;
     var hasData = S.fullData.length > 0;
     var n = S.viewRows.length;
-    elNone.style.display =
-      !loading && n === 0 && !hasData ? "block" : "none";
-    elNoMatch.style.display =
-      !loading && n === 0 && hasData ? "block" : "none";
+    elNone.style.display = !loading && n === 0 && !hasData ? "block" : "none";
+    elNoMatch.style.display = !loading && n === 0 && hasData ? "block" : "none";
   }
 
   function setLoadError(msg) {
+    if (msg) {
+      debugLog("setLoadError", msg);
+    }
     var el = $("load-error");
     if (el) {
       el.textContent = msg || "";
@@ -691,6 +680,9 @@
   }
 
   function setRuntimeWarning(msg) {
+    if (msg) {
+      debugLog("setRuntimeWarning", msg);
+    }
     var el = $("runtime-warning");
     if (el) {
       el.textContent = msg || "";
@@ -758,18 +750,7 @@
       var id = e.id;
       var idStr = String(id);
       var editing = S.editingId === id;
-      parts.push(
-        '<article class="entry" data-entry-id="' + escapeAttr(idStr) + '">'
-      );
-      if (!editing) {
-        parts.push(
-          '<label class="entry-select-wrap" title="Select for bulk delete or tag"><input type="checkbox" data-entry-select data-id="' +
-            escapeAttr(idStr) +
-            '"' +
-            (S.selectedIds[idStr] ? " checked" : "") +
-            "></label>"
-        );
-      }
+      parts.push('<article class="entry" data-entry-id="' + escapeAttr(idStr) + '">');
       parts.push('<div class="entry-main">');
       if (!editing) {
         parts.push('<div class="entry-actions">');
@@ -783,22 +764,20 @@
             escapeAttr(idStr) +
             '">🗑</button>'
         );
-        parts.push("</div>");
         parts.push(
-          '<div class="entry-meta">' +
-            escapeHtml(formatDate(e.created_at)) +
-            "</div>"
+          '<label class="entry-select-wrap" title="Select for bulk delete or tag"><input type="checkbox" data-entry-select data-id="' +
+            escapeAttr(idStr) +
+            '"' +
+            (S.selectedIds[idStr] ? " checked" : "") +
+            "></label>"
         );
-        if (e.summary) {
-          parts.push(
-            '<div class="entry-title-line">' + item.summaryHtml + "</div>"
-          );
-        } else {
-          parts.push(
-            '<div class="entry-title-line untitled">Untitled</div>'
-          );
-        }
+        parts.push("</div>");
         parts.push('<div class="entry-body">' + item.rawHtml + "</div>");
+        if (e.summary) {
+          parts.push('<div class="entry-title-line">' + item.summaryHtml + "</div>");
+        } else {
+          parts.push('<div class="entry-title-line untitled">Untitled</div>');
+        }
         if (item.tagSpans && item.tagSpans.length) {
           parts.push('<div class="tags">');
           var ti;
@@ -815,11 +794,6 @@
             );
           }
           parts.push("</div>");
-        }
-        if (e.sentiment) {
-          parts.push(
-            '<div class="sentiment">' + escapeHtml(e.sentiment) + "</div>"
-          );
         }
       } else {
         parts.push('<div class="edit-box">');
@@ -883,11 +857,16 @@
     setLoadError("");
     try {
       var list = await S.transport.list();
+      debugLog("loadEntries success count", Array.isArray(list) ? list.length : 0);
       S.fullData = (list || []).map(enrichEntry);
       pruneSelectedIds();
       rebuildTagCatalog();
       applyLocalFilter();
     } catch (err) {
+      debugLog(
+        "loadEntries failed",
+        String(err && err.message ? err.message : err)
+      );
       setLoadError((err && err.message) || "Failed to load entries");
       S.fullData = [];
       S.viewRows = [];
@@ -1273,6 +1252,9 @@
 
   function init() {
     bind();
+    debugLog("Init start");
+    debugLog("Location", window.location.href);
+    debugLog("window.DIARY_APP_CONFIG", window.DIARY_APP_CONFIG || null);
     if (
       typeof window !== "undefined" &&
       window.location.protocol === "file:"
@@ -1285,24 +1267,35 @@
     }
 
     var DT = window.DiaryTransport;
-    if (!DT || typeof DT.createAppsScriptRunTransport !== "function") {
+    if (!DT || typeof DT.createHttpTransport !== "function") {
+      setLoadError("Missing window.DiaryTransport transport.js script.");
+      return;
+    }
+
+    var base = getAppScriptBaseUrl();
+    debugLog("Resolved APPS_SCRIPT_URL", base || "(empty)");
+    if (!base) {
+      fetch("config.js?ts=" + Date.now(), { cache: "no-store" })
+        .then(function (res) {
+          debugLog("config.js fetch status", res.status);
+          return res.text();
+        })
+        .then(function (txt) {
+          debugLog("config.js body preview", String(txt || "").slice(0, 400));
+        })
+        .catch(function (err) {
+          debugLog(
+            "config.js fetch failed",
+            String(err && err.message ? err.message : err)
+          );
+        });
       setLoadError(
-        "Missing window.DiaryTransport: keep the inline script in Index.html in sync with DiaryTransport.inline.html."
+        "Set APPS_SCRIPT_URL in config.js to your deployed Apps Script Web App /exec URL."
       );
       return;
     }
-    if (isGasHosted()) {
-      S.transport = DT.createAppsScriptRunTransport();
-    } else {
-      var base = getAppScriptBaseUrl();
-      if (!base) {
-        setLoadError(
-          "Set APPS_SCRIPT_URL in window.DIARY_APP_CONFIG (or open this UI from the Apps Script Web App)."
-        );
-        return;
-      }
-      S.transport = DT.createHttpTransport(base);
-    }
+    S.transport = DT.createHttpTransport(base);
+
     syncSaveButton();
     syncImportButton();
     syncSearchClear();
@@ -1315,4 +1308,3 @@
     init();
   }
 })();
-</script>

@@ -14,10 +14,17 @@ diary.db
 *.db-wal
 
 # Local IDE/editor and OS files
-.vscode/
+.vscode/settings.json
+.vscode/*.code-workspace
 .idea/
 .DS_Store
 Thumbs.db
 
 # Project-local scratch/reference assets not for source control
 ref/
+
+# Local preview server (dev/local-preview-server.js)
+dev/local-diary-data.json
+
+# Local env (e.g. DIARY_REMOTE_WEBAPP_URL for Cursor/VS Code F5)
+.env
