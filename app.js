@@ -993,6 +993,7 @@
           panel.hidden = true;
           panel.innerHTML = "";
         }
+        closeSidebarSheet();
         return loadEntries();
       })
       .catch(function (err) {
@@ -1150,6 +1151,13 @@
       .finally(endSync);
   }
 
+  function closeSidebarSheet() {
+    var sb = $("sidebar");
+    var bd = $("sidebar-backdrop");
+    if (sb) sb.classList.remove("sidebar-open");
+    if (bd) bd.classList.remove("visible");
+  }
+
   function clearSearch() {
     var q = $("q");
     if (q) q.value = "";
@@ -1244,6 +1252,24 @@
         e.stopPropagation();
         void addSelectionAsTag();
       });
+    }
+    var fab = $("fab-new");
+    var sidebarBackdrop = $("sidebar-backdrop");
+    if (fab) {
+      fab.addEventListener("click", function () {
+        var sb = $("sidebar");
+        if (!sb || !sidebarBackdrop) return;
+        var isOpen = sb.classList.contains("sidebar-open");
+        if (isOpen) {
+          closeSidebarSheet();
+        } else {
+          sb.classList.add("sidebar-open");
+          sidebarBackdrop.classList.add("visible");
+        }
+      });
+    }
+    if (sidebarBackdrop) {
+      sidebarBackdrop.addEventListener("click", closeSidebarSheet);
     }
     window.addEventListener("scroll", closeTagMenu, true);
     window.addEventListener("resize", closeTagMenu);
