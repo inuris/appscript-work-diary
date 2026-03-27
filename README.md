@@ -11,7 +11,7 @@ GitHub Pages (static files)
       | fetch (GET/POST JSON)
       v
 Apps Script Web App (/exec)
-  WebAppHost.gs + DiarySheetStore.gs
+  appsscript/WebAppHost.gs + appsscript/DiarySheetStore.gs
       |
       v
 Google Sheet (diary rows)
@@ -26,13 +26,15 @@ Google Sheet (diary rows)
 | `app.js` | UI behavior (search, create/update/delete/import, bulk actions). |
 | `transport.js` | HTTP transport to Apps Script API. |
 | `config.js` | Runtime config (`APPS_SCRIPT_URL`). |
-| `WebAppHost.gs` | Apps Script JSON API entrypoint (`doGet`, `doPost`). |
-| `DiarySheetStore.gs` | Google Sheets persistence and domain logic. |
+| `appsscript/WebAppHost.gs` | Apps Script JSON API entrypoint (`doGet`, `doPost`). |
+| `appsscript/DiarySheetStore.gs` | Google Sheets persistence and domain logic. |
+| `appsscript/appsscript.json` | Apps Script manifest for API deployment. |
+| `appsscript/README.md` | Keep/delete checklist for Apps Script-only backend. |
 | `dev/local-preview-server.js` | Local dev server (static assets + optional API proxy). |
 
 ## Configure backend (Apps Script)
 
-In `WebAppHost.gs`, set:
+In `appsscript/WebAppHost.gs`, set:
 
 - `APP_CONFIG.SS_ID`
 - `APP_CONFIG.SHEET_GID`
@@ -80,4 +82,4 @@ DIARY_REMOTE_WEBAPP_URL="https://script.google.com/macros/s/XXX/exec" npm run pr
 
 - `GET ?action=list` → `{ ok, entries }`
 - `POST` JSON body:
-  `{ "action": "create"|"update"|"delete"|"import"|"append_tag", "payload": { ... } }`
+  `{ "action": "create"|"update"|"delete"|"import"|"append_tag"|"ai_diary_input", "payload": { ... } }`

@@ -35,6 +35,26 @@
       <p id="save-error" class="err" style="display: none"></p>
 
       <div class="sidebar-section import-block">
+        <label for="ai-diary-input" class="label-tip">
+          AI diary input
+          <span
+            class="tip-icon"
+            tabindex="0"
+            role="tooltip"
+            title="Paste free-form text (usually starts with diary input). Click Process with AI to auto-build logs JSON."
+            >?</span
+          >
+        </label>
+        <textarea
+          id="ai-diary-input"
+          class="import-textarea"
+          placeholder="Paste diary input text..."
+          rows="5"
+        ></textarea>
+        <div class="btn-row">
+          <button type="button" id="btn-ai-process" disabled>Process with AI</button>
+        </div>
+
         <label for="import-json" class="label-tip">
           Import JSON
           <span

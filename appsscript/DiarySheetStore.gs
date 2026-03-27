@@ -26,7 +26,10 @@ function ensureHeaders_(sheet) {
   var first = sheet.getRange(1, 1, 1, HEADERS.length).getValues()[0];
   var ok = true;
   for (var i = 0; i < HEADERS.length; i++) {
-    if (String(first[i] || "").trim() !== HEADERS[i]) { ok = false; break; }
+    if (String(first[i] || "").trim() !== HEADERS[i]) {
+      ok = false;
+      break;
+    }
   }
   if (!ok) {
     sheet.insertRowBefore(1);

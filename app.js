@@ -636,6 +636,7 @@
     syncDepth: 0,
     saveInFlight: false,
     importInFlight: false,
+    aiInFlight: false,
     editInFlight: false,
     editingId: null,
     editDraft: "",
@@ -719,6 +720,87 @@
     if (!btn || !ta) return;
     btn.disabled = S.importInFlight || isEffectivelyEmptyText(ta.value);
     btn.textContent = "Import";
+  }
+
+  function syncAiProcessButton() {
+    var btn = $("btn-ai-process");
+    var ta = $("ai-diary-input");
+    if (!btn || !ta) return;
+    btn.disabled = S.aiInFlight || isEffectivelyEmptyText(ta.value);
+    btn.textContent = S.aiInFlight ? "Processing..." : "Process with AI";
+  }
+
+  function stripDiaryInputPrefix(text) {
+    var s = normalizeLineEndings(text || "");
+    s = s.replace(/^\s*diary input\s*/i, "");
+    var fenced = s.match(/^\s*```[\w-]*\s*([\s\S]*?)\s*```\s*$/);
+    if (fenced && fenced[1]) return fenced[1].trim();
+    return s.trim();
+  }
+
+  function loadDiaryInputRulePrompt() {
+    return fetch(".cursor/rules/diary-input-import.mdc?ts=" + Date.now(), {
+      cache: "no-store",
+    })
+      .then(function (res) {
+        if (!res.ok) throw new Error("Rule file not found");
+        return res.text();
+      })
+      .then(function (txt) {
+        return String(txt || "");
+      })
+      .catch(function () {
+        return "";
+      });
+  }
+
+  function processDiaryInputWithAi() {
+    var inputEl = $("ai-diary-input");
+    var outEl = $("import-json");
+    if (
+      !inputEl ||
+      !outEl ||
+      !S.transport ||
+      typeof S.transport.aiDiaryInput !== "function"
+    ) {
+      setSaveError("AI transport is unavailable");
+      return;
+    }
+    if (S.aiInFlight || isEffectivelyEmptyText(inputEl.value)) return;
+
+    var source = stripDiaryInputPrefix(inputEl.value);
+    if (isEffectivelyEmptyText(source)) {
+      setSaveError("Diary input is empty");
+      return;
+    }
+
+    S.aiInFlight = true;
+    beginSync();
+    setSaveError("");
+    syncAiProcessButton();
+
+    Promise.resolve()
+      .then(loadDiaryInputRulePrompt)
+      .then(function (ruleText) {
+        return S.transport.aiDiaryInput({
+          text: source,
+          rule_prompt: ruleText,
+        });
+      })
+      .then(function (res) {
+        var logs = Array.isArray(res.logs) ? res.logs : [];
+        if (!logs.length) throw new Error("AI returned empty logs");
+        outEl.value = JSON.stringify({ logs: logs }, null, 2);
+        syncImportButton();
+      })
+      .catch(function (err) {
+        setSaveError((err && err.message) || "AI processing failed");
+      })
+      .finally(function () {
+        endSync();
+        S.aiInFlight = false;
+        syncAiProcessButton();
+      });
   }
 
   function paintCtxMenu() {
@@ -1240,6 +1322,14 @@
     var ij = $("import-json");
     if (bi) bi.addEventListener("click", function () { void importLogs(); });
     if (ij) ij.addEventListener("input", syncImportButton);
+    var aiBtn = $("btn-ai-process");
+    var aiIn = $("ai-diary-input");
+    if (aiBtn) {
+      aiBtn.addEventListener("click", function () {
+        void processDiaryInputWithAi();
+      });
+    }
+    if (aiIn) aiIn.addEventListener("input", syncAiProcessButton);
     var ctx = $("ctx-menu");
     if (ctx) {
       ctx.addEventListener("click", function (e) {
@@ -1324,6 +1414,7 @@
 
     syncSaveButton();
     syncImportButton();
+    syncAiProcessButton();
     syncSearchClear();
     void loadEntries();
   }
