@@ -13,14 +13,6 @@
     <aside id="app-sidebar" class="sidebar panel">
       <div class="sidebar-heading-wrap">
         <h2 class="sidebar-heading">Add New</h2>
-        <button
-          type="button"
-          id="sidebar-close-btn"
-          class="secondary sidebar-close-btn"
-          aria-label="Close new entry panel"
-        >
-          Close
-        </button>
       </div>
       <p id="save-error" class="err" style="display: none"></p>
       <div class="sidebar-section import-block">
@@ -43,9 +35,6 @@
         <div class="btn-row">
           <button type="button" id="btn-add" disabled>Add</button>
         </div>
-        <p id="ai-quota-note" class="tiny-note ai-quota-note">
-          Remaining tokens/quota are not exposed by Google AI API in this app setup.
-        </p>
       </div>
     </aside>
 
@@ -148,8 +137,6 @@
       </div>
     </div>
   </div>
-
-  <div id="mobile-sidebar-backdrop" class="mobile-sidebar-backdrop" hidden></div>
 
   <script src="transport.js"></script>
   <script src="app.js"></script>

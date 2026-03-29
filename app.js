@@ -331,93 +331,6 @@
     return out;
   }
 
-  function rebuildTagCatalog() {
-    var counts = {};
-    var i;
-    for (i = 0; i < S.fullData.length; i++) {
-      var tags = S.fullData[i].tags || [];
-      var t;
-      for (t = 0; t < tags.length; t++) {
-        var k = String(tags[t]).trim().toLowerCase();
-        if (!k) continue;
-        counts[k] = (counts[k] || 0) + 1;
-      }
-    }
-    var pairs = Object.keys(counts).map(function (k) {
-      return { tag: k, count: counts[k] };
-    });
-    pairs.sort(function (a, b) {
-      if (b.count !== a.count) return b.count - a.count;
-      return a.tag.localeCompare(b.tag);
-    });
-    S.tagCatalog = pairs;
-    var dl = $("tag-datalist");
-    if (dl) {
-      dl.innerHTML = pairs
-        .map(function (p) {
-          return "<option value=\"" + escapeAttr(p.tag) + "\"></option>";
-        })
-        .join("");
-    }
-  }
-
-  function getTagPrefixForSuggest(el) {
-    var v = el.value;
-    var end = el.selectionStart != null ? el.selectionStart : v.length;
-    var before = v.slice(0, end);
-    var lc = before.lastIndexOf(",");
-    var frag = (lc < 0 ? before : before.slice(lc + 1)).trim().toLowerCase();
-    return frag;
-  }
-
-  function renderTagSuggest() {
-    var el = $("entry-tags");
-    var panel = $("tag-suggest-panel");
-    if (!el || !panel) return;
-    if (document.activeElement !== el) {
-      panel.hidden = true;
-      panel.innerHTML = "";
-      return;
-    }
-    var frag = getTagPrefixForSuggest(el);
-    var list = S.tagCatalog
-      .filter(function (p) {
-        return !frag || p.tag.indexOf(frag) === 0;
-      })
-      .slice(0, 12);
-    if (!list.length) {
-      panel.hidden = true;
-      panel.innerHTML = "";
-      return;
-    }
-    panel.innerHTML = list
-      .map(function (p) {
-        return (
-          '<button type="button" class="tag-suggest-item" data-suggest-tag="' +
-          escapeAttr(p.tag) +
-          '"><span>' +
-          escapeHtml(p.tag) +
-          '</span><span class="tag-suggest-count">' +
-          p.count +
-          "</span></button>"
-        );
-      })
-      .join("");
-    panel.hidden = false;
-  }
-
-  function insertTagSuggestion(tag) {
-    var el = $("entry-tags");
-    if (!el) return;
-    var lower = tag.toLowerCase();
-    var existing = parseTagsFromInput(el.value);
-    if (existing.indexOf(lower) >= 0) return;
-    var v = el.value.replace(/\s+$/, "");
-    el.value = (v ? v + ", " : "") + tag;
-    el.focus();
-    renderTagSuggest();
-  }
-
   function openImportModal(data) {
     var root = $("import-modal");
     var body = $("import-modal-body");
@@ -663,11 +576,8 @@
     transport: null,
     fullData: [],
     viewRows: [],
-    tagCatalog: [],
     selectedIds: {},
     syncDepth: 0,
-    saveInFlight: false,
-    importInFlight: false,
     aiInFlight: false,
     approveInFlight: false,
     editInFlight: false,
@@ -739,22 +649,6 @@
     var q = $("q");
     if (!btn || !q) return;
     btn.style.display = q.value.trim() ? "inline-flex" : "none";
-  }
-
-  function syncSaveButton() {
-    var btn = $("btn-save");
-    var desc = $("entry-desc");
-    if (!btn || !desc) return;
-    btn.disabled = isEffectivelyEmptyText(desc.value) || S.saveInFlight;
-    btn.textContent = "Save";
-  }
-
-  function syncImportButton() {
-    var btn = $("btn-import");
-    var ta = $("import-json");
-    if (!btn || !ta) return;
-    btn.disabled = S.importInFlight || isEffectivelyEmptyText(ta.value);
-    btn.textContent = "Import";
   }
 
   function syncAiProcessButton() {
@@ -1092,7 +986,6 @@
       paintEntryList();
       paintEmptyState();
       paintBulkBar();
-      rebuildTagCatalog();
       return;
     }
     S.loading = true;
@@ -1103,7 +996,6 @@
       debugLog("loadEntries success count", Array.isArray(list) ? list.length : 0);
       S.fullData = (list || []).map(enrichEntry);
       pruneSelectedIds();
-      rebuildTagCatalog();
       applyLocalFilter();
     } catch (err) {
       debugLog(
@@ -1113,11 +1005,9 @@
       setLoadError((err && err.message) || "Failed to load entries");
       S.fullData = [];
       S.viewRows = [];
-      S.tagCatalog = [];
       paintEntryList();
       paintEmptyState();
       paintBulkBar();
-      rebuildTagCatalog();
     } finally {
       S.loading = false;
       endSync();
@@ -1211,48 +1101,6 @@
     paintCtxMenu();
   }
 
-  function saveEntry() {
-    var titleEl = $("entry-title");
-    var descEl = $("entry-desc");
-    var tagsEl = $("entry-tags");
-    if (!descEl || !S.transport) return;
-    var raw_text = normalizeLineEndings(descEl.value);
-    if (isEffectivelyEmptyText(raw_text)) return;
-    if (S.saveInFlight) return;
-    var summary = titleEl ? normalizeLineEndings(titleEl.value) : "";
-    var tags = tagsEl ? parseTagsFromInput(tagsEl.value) : [];
-    S.saveInFlight = true;
-    beginSync();
-    setSaveError("");
-    syncSaveButton();
-    S.transport
-      .create({
-        raw_text: raw_text,
-        summary: summary,
-        tags: tags,
-      })
-      .then(function () {
-        if (titleEl) titleEl.value = "";
-        descEl.value = "";
-        if (tagsEl) tagsEl.value = "";
-        var panel = $("tag-suggest-panel");
-        if (panel) {
-          panel.hidden = true;
-          panel.innerHTML = "";
-        }
-        closeSidebarSheet();
-        return loadEntries();
-      })
-      .catch(function (err) {
-        setSaveError((err && err.message) || "Save failed");
-      })
-      .finally(function () {
-        endSync();
-        S.saveInFlight = false;
-        syncSaveButton();
-      });
-  }
-
   function updateEntry() {
     if (!S.editingId || isEffectivelyEmptyText(S.editRaw) || !S.transport) return;
     if (S.editInFlight) return;
@@ -1288,47 +1136,6 @@
         endSync();
         S.editInFlight = false;
         paintEntryList();
-      });
-  }
-
-  function importLogs() {
-    var ta = $("import-json");
-    if (!ta || !S.transport) return;
-    if (isEffectivelyEmptyText(ta.value)) return;
-    if (S.importInFlight) return;
-    S.importInFlight = true;
-    beginSync();
-    setSaveError("");
-    syncImportButton();
-    var payload;
-    try {
-      var parsed = JSON.parse(ta.value);
-      var logs = Array.isArray(parsed) ? parsed : parsed.logs;
-      if (!Array.isArray(logs) || !logs.length) {
-        throw new Error("Invalid import JSON");
-      }
-      payload = { logs: logs };
-    } catch (e) {
-      endSync();
-      S.importInFlight = false;
-      syncImportButton();
-      setSaveError((e && e.message) || "Invalid JSON");
-      return;
-    }
-    S.transport
-      .importLogs(payload)
-      .then(function (data) {
-        ta.value = "";
-        openImportModal(data);
-        return loadEntries();
-      })
-      .catch(function (err) {
-        setSaveError((err && err.message) || "Import failed");
-      })
-      .finally(function () {
-        endSync();
-        S.importInFlight = false;
-        syncImportButton();
       });
   }
 
@@ -1617,8 +1424,6 @@
     }
     S.transport = DT.createHttpTransport(base);
 
-    syncSaveButton();
-    syncImportButton();
     syncAiProcessButton();
     syncSearchClear();
     void loadEntries();

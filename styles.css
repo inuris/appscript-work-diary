@@ -57,10 +57,6 @@ body {
   letter-spacing: 0.06em;
   color: var(--muted);
 }
-.sidebar-textarea {
-  min-height: 120px;
-  resize: vertical;
-}
 .sidebar-section {
   margin-top: 1.25rem;
   padding-top: 1rem;
@@ -361,43 +357,6 @@ button.secondary {
 .tags-field-wrap {
   position: relative;
 }
-.tag-suggest-panel {
-  position: absolute;
-  left: 0;
-  right: 0;
-  top: 100%;
-  margin-top: 2px;
-  max-height: 200px;
-  overflow-y: auto;
-  background: #101b2d;
-  border: 1px solid #35567f;
-  border-radius: 10px;
-  box-shadow: 0 12px 24px rgba(0, 0, 0, 0.35);
-  z-index: 50;
-}
-.tag-suggest-item {
-  display: flex;
-  justify-content: space-between;
-  gap: 0.5rem;
-  padding: 0.45rem 0.65rem;
-  font-size: 0.85rem;
-  cursor: pointer;
-  color: var(--text);
-  border: 0;
-  width: 100%;
-  text-align: left;
-  background: transparent;
-  font: inherit;
-}
-.tag-suggest-item:hover,
-.tag-suggest-item:focus {
-  background: #1d2c46;
-  outline: none;
-}
-.tag-suggest-count {
-  color: var(--muted);
-  font-size: 0.75rem;
-}
 .modal-root {
   position: fixed;
   inset: 0;
@@ -664,11 +623,6 @@ button.secondary {
 .edit-box { margin-top: 0.45rem; }
 .edit-box textarea { min-height: 105px; }
 .tiny-note { color: var(--muted); margin: 0.35rem 0 0; font-size: 0.75rem; }
-.ai-quota-note {
-  margin-top: 0.55rem;
-  line-height: 1.35;
-  color: #9fb6d7;
-}
 .err {
   margin-top: 0.7rem;
   color: #ffd3da;
