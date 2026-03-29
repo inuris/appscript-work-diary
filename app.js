@@ -846,14 +846,7 @@
 
   function processDiaryInputWithAi() {
     var inputEl = $("add-input");
-    if (
-      !inputEl ||
-      !S.transport ||
-      typeof S.transport.aiDiaryInput !== "function"
-    ) {
-      setSaveError("AI transport is unavailable");
-      return;
-    }
+    if (!inputEl || !S.transport) return;
     if (S.aiInFlight || isEffectivelyEmptyText(inputEl.value)) return;
 
     var source = stripDiaryInputPrefix(inputEl.value);
@@ -868,21 +861,26 @@
     syncAiProcessButton();
 
     Promise.resolve()
-      .then(loadDiaryInputRulePrompt)
-      .then(function (ruleText) {
-        return S.transport.aiDiaryInput({
-          text: source,
-          rule_prompt: ruleText,
+      .then(function () {
+        return S.transport.importLogs({
+          logs: [
+            {
+              raw_text: source,
+              title: "",
+              summary: "",
+              tags: [],
+              sentiment: "Neutral",
+            },
+          ],
         });
       })
       .then(function (res) {
-        var rows = normalizePreviewRows(res.logs);
-        if (!rows.length) throw new Error("AI returned empty rows");
-        S.previewRows = rows;
-        openPreviewModal();
+        inputEl.value = "";
+        openImportModal(res);
+        return loadEntries();
       })
       .catch(function (err) {
-        setSaveError((err && err.message) || "AI processing failed");
+        setSaveError((err && err.message) || "Add failed");
       })
       .finally(function () {
         endSync();

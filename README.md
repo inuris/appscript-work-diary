@@ -82,4 +82,4 @@ DIARY_REMOTE_WEBAPP_URL="https://script.google.com/macros/s/XXX/exec" npm run pr
 
 - `GET ?action=list` → `{ ok, entries }`
 - `POST` JSON body:
-  `{ "action": "create"|"update"|"delete"|"import"|"append_tag"|"ai_diary_input", "payload": { ... } }`
+  `{ "action": "create"|"update"|"delete"|"import"|"append_tag", "payload": { ... } }`

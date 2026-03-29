@@ -23,12 +23,10 @@ Apps Script is API-only now.
 
 ## Required setup in Apps Script
 
-1. Open Script Properties and set:
-   - `GOOGLE_AI_API_KEY` = your Google AI Studio API key
-2. In `WebAppHost.gs`, set:
+1. In `WebAppHost.gs`, set:
    - `APP_CONFIG.SS_ID`
    - `APP_CONFIG.SHEET_GID`
-3. Deploy as Web App (`/exec` URL).
+2. Deploy as Web App (`/exec` URL).
 
 Sheet columns (in order):
 
@@ -58,4 +56,3 @@ Supported actions:
 - `delete`
 - `import`
 - `append_tag`
-- `ai_diary_input`
