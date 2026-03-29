@@ -3,7 +3,18 @@
  * No HTTP — only plain functions used by WebAppHost.gs.
  * You can lift these handlers into another backend later.
  */
-var HEADERS = ["Timestamp", "created_at", "raw_text", "title", "summary", "tags", "sentiment"];
+var HEADERS = ["id", "Timestamp", "created_at", "raw_text", "title", "summary", "tags", "sentiment"];
+
+var IDX = {
+  ID: 0,
+  TIMESTAMP: 1,
+  CREATED_AT: 2,
+  RAW_TEXT: 3,
+  TITLE: 4,
+  SUMMARY: 5,
+  TAGS: 6,
+  SENTIMENT: 7,
+};
 
 function normalizeLineEndings_(s) {
   return String(s == null ? "" : s).replace(/\r\n/g, "\n").replace(/\r/g, "\n");
@@ -38,16 +49,21 @@ function ensureHeaders_(sheet) {
 }
 
 function rowToObject_(row) {
-  var ts = row[0] == null ? "" : String(row[0]);
+  var id = row[IDX.ID] == null ? "" : String(row[IDX.ID]);
+  var ts = row[IDX.TIMESTAMP] == null ? "" : String(row[IDX.TIMESTAMP]);
   return {
-    id: ts,
+    id: id,
     timestamp: ts,
-    created_at: row[1] === "" || row[1] == null ? "" : String(row[1]),
-    raw_text: normalizeLineEndings_(row[2] == null ? "" : String(row[2])),
-    title: normalizeLineEndings_(row[3] == null ? "" : String(row[3])),
-    summary: normalizeLineEndings_(row[4] == null ? "" : String(row[4])),
-    tags: parseTags_(row[5]),
-    sentiment: row[6] == null || row[6] === "" ? null : String(row[6]),
+    created_at: row[IDX.CREATED_AT] === "" || row[IDX.CREATED_AT] == null
+      ? ""
+      : String(row[IDX.CREATED_AT]),
+    raw_text: normalizeLineEndings_(row[IDX.RAW_TEXT] == null ? "" : String(row[IDX.RAW_TEXT])),
+    title: normalizeLineEndings_(row[IDX.TITLE] == null ? "" : String(row[IDX.TITLE])),
+    summary: normalizeLineEndings_(row[IDX.SUMMARY] == null ? "" : String(row[IDX.SUMMARY])),
+    tags: parseTags_(row[IDX.TAGS]),
+    sentiment: row[IDX.SENTIMENT] == null || row[IDX.SENTIMENT] === ""
+      ? null
+      : String(row[IDX.SENTIMENT]),
   };
 }
 
@@ -66,9 +82,12 @@ function isLikelyHeaderRow_(row) {
   var c0 = String(row[0] || "").trim().toLowerCase();
   var c1 = String(row[1] || "").trim().toLowerCase();
   var c2 = String(row[2] || "").trim().toLowerCase();
+  var c3 = String(row[3] || "").trim().toLowerCase();
+  if (c0 === "id" && c1 === "timestamp") return true;
+  if (c0 === "id" && c2 === "created_at") return true;
   if (c0 === "timestamp" && c2 === "raw_text") return true;
   if (c0 === "timestamp" && c1 === "created_at") return true;
-  if (c2 === "raw_text") return true;
+  if (c3 === "raw_text") return true;
   var match = 0;
   for (var i = 0; i < HEADERS.length; i++) {
     if (String(row[i] || "").trim().toLowerCase() === HEADERS[i]) match++;
@@ -77,7 +96,7 @@ function isLikelyHeaderRow_(row) {
 }
 
 function isBlankRow_(row) {
-  return isEffectivelyEmptyText_(row[2] == null ? "" : row[2]);
+  return isEffectivelyEmptyText_(row[IDX.RAW_TEXT] == null ? "" : row[IDX.RAW_TEXT]);
 }
 
 function readAllEntries_() {
@@ -85,12 +104,18 @@ function readAllEntries_() {
   ensureHeaders_(sheet);
   var last = sheet.getLastRow();
   if (last < 2) return [];
-  var data = sheet.getRange(2, 1, last, HEADERS.length).getValues();
+  var data = sheet.getRange(2, 1, last - 1, HEADERS.length).getValues();
   var out = [];
   for (var i = 0; i < data.length; i++) {
     if (isLikelyHeaderRow_(data[i])) continue;
     if (isBlankRow_(data[i])) continue;
-    out.push(rowToObject_(data[i]));
+    var entry = rowToObject_(data[i]);
+    if (!String(entry.id || "").trim()) {
+      // Backfill ID for older rows that predate the `id` column.
+      entry.id = String(entry.timestamp || (i + 1));
+      sheet.getRange(i + 2, 1).setValue(entry.id);
+    }
+    out.push(entry);
   }
   return out;
 }
@@ -98,7 +123,7 @@ function readAllEntries_() {
 function findRowIndexById_(sheet, id) {
   var last = sheet.getLastRow();
   if (last < 2) return -1;
-  var ids = sheet.getRange(2, 1, last, 1).getValues();
+  var ids = sheet.getRange(2, 1, last - 1, 1).getValues();
   var target = String(id || "");
   for (var i = 0; i < ids.length; i++) {
     if (String(ids[i][0] || "") === target) return i + 2;
@@ -112,13 +137,28 @@ function nextTimestampId_() {
   return formatDateTime_(d).replace(/[-: ]/g, "") + ms;
 }
 
+function nextNumericId_(sheet) {
+  var last = sheet.getLastRow();
+  if (last < 2) return 1;
+  var ids = sheet.getRange(2, 1, last - 1, 1).getValues();
+  var maxId = 0;
+  for (var i = 0; i < ids.length; i++) {
+    var n = Number(ids[i][0]);
+    if (!isNaN(n) && n > maxId) maxId = n;
+  }
+  return maxId + 1;
+}
+
 function handleCreate_(p) {
   var raw = normalizeLineEndings_(p.raw_text);
   if (isEffectivelyEmptyText_(raw)) return { ok: false, error: "raw_text is required" };
 
   var sheet = getSheet_();
   ensureHeaders_(sheet);
-  var id = p.timestamp && String(p.timestamp).trim()
+  var id = p.id != null && String(p.id).trim()
+    ? String(p.id).trim()
+    : String(nextNumericId_(sheet));
+  var ts = p.timestamp && String(p.timestamp).trim()
     ? String(p.timestamp).trim()
     : nextTimestampId_();
   var created = p.created_at && String(p.created_at).trim()
@@ -129,8 +169,8 @@ function handleCreate_(p) {
   var tags = normalizeTagsInput_(p.tags);
   var sentiment = normalizeSentiment_(p.sentiment);
 
-  sheet.appendRow([id, created, raw, title, summary, JSON.stringify(tags), sentiment]);
-  return { ok: true, entry: buildEntry_(id, created, raw, title, summary, tags, sentiment) };
+  sheet.appendRow([id, ts, created, raw, title, summary, JSON.stringify(tags), sentiment]);
+  return { ok: true, entry: buildEntry_(id, ts, created, raw, title, summary, tags, sentiment) };
 }
 
 function handleUpdate_(p) {
@@ -153,10 +193,17 @@ function handleUpdate_(p) {
     : cur.sentiment;
 
   sheet.getRange(rowIndex, 1, 1, HEADERS.length).setValues([[
-    id, cur.created_at, raw, title, summary, JSON.stringify(tags), sentiment
+    id,
+    cur.timestamp,
+    cur.created_at,
+    raw,
+    title,
+    summary,
+    JSON.stringify(tags),
+    sentiment,
   ]]);
 
-  return { ok: true, entry: buildEntry_(id, cur.created_at, raw, title, summary, tags, sentiment) };
+  return { ok: true, entry: buildEntry_(id, cur.timestamp, cur.created_at, raw, title, summary, tags, sentiment) };
 }
 
 function handleDelete_(p) {
@@ -178,6 +225,7 @@ function handleImport_(p) {
   for (var i = 0; i < logs.length; i++) {
     var item = logs[i];
     var r = handleCreate_({
+      id: item.id,
       raw_text: item.raw_text,
       title: item.title,
       summary: item.summary,
@@ -215,16 +263,35 @@ function handleAppendTag_(p) {
   if (tags.length > 12) tags = tags.slice(0, 12);
 
   sheet.getRange(rowIndex, 1, 1, HEADERS.length).setValues([[
-    cur.id, cur.created_at, cur.raw_text, cur.title, cur.summary, JSON.stringify(tags), cur.sentiment
+    cur.id,
+    cur.timestamp,
+    cur.created_at,
+    cur.raw_text,
+    cur.title,
+    cur.summary,
+    JSON.stringify(tags),
+    cur.sentiment,
   ]]);
 
-  return { ok: true, entry: buildEntry_(cur.id, cur.created_at, cur.raw_text, cur.title, cur.summary, tags, cur.sentiment) };
+  return {
+    ok: true,
+    entry: buildEntry_(
+      cur.id,
+      cur.timestamp,
+      cur.created_at,
+      cur.raw_text,
+      cur.title,
+      cur.summary,
+      tags,
+      cur.sentiment
+    ),
+  };
 }
 
-function buildEntry_(id, created_at, raw_text, title, summary, tags, sentiment) {
+function buildEntry_(id, timestamp, created_at, raw_text, title, summary, tags, sentiment) {
   return {
     id: id,
-    timestamp: id,
+    timestamp: timestamp,
     created_at: created_at,
     raw_text: raw_text,
     title: title,

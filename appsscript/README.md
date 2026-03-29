@@ -32,6 +32,7 @@ Apps Script is API-only now.
 
 Sheet columns (in order):
 
+- `id`
 - `Timestamp`
 - `created_at`
 - `raw_text`

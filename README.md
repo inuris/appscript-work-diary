@@ -42,7 +42,7 @@ In `appsscript/WebAppHost.gs`, set:
 Deploy Apps Script as **Web app** and copy the `/exec` URL.
 
 The backend sheet expects columns in this order:
-`Timestamp`, `created_at`, `raw_text`, `title`, `summary`, `tags`, `sentiment`
+`id`, `Timestamp`, `created_at`, `raw_text`, `title`, `summary`, `tags`, `sentiment`
 
 ## Configure frontend (GitHub Pages)
 
