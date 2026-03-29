@@ -807,6 +807,12 @@
     });
   }
 
+  function countIncludedPreviewRows() {
+    return S.previewRows.filter(function (x) {
+      return x.include !== false;
+    }).length;
+  }
+
   function paintPreviewModal() {
     var body = $("preview-modal-body");
     if (!body) return;
@@ -814,14 +820,30 @@
       body.innerHTML = '<p class="empty">No rows to approve.</p>';
       return;
     }
-    var html = '<div class="preview-table-wrap"><table class="preview-table"><thead><tr>' +
-      '<th>Add</th><th>#</th><th>Raw Text</th><th>Title</th><th>Summary</th><th></th></tr></thead><tbody>';
+    var selected = countIncludedPreviewRows();
+    var total = S.previewRows.length;
+    var html =
+      '<div class="preview-toolbar">' +
+      '<p id="preview-selected-meta" class="preview-selected-meta">Selected ' +
+      selected +
+      ' / ' +
+      total +
+      '</p>' +
+      '<div class="preview-toolbar-actions">' +
+      '<button type="button" class="secondary" data-preview-select-all>Select all</button>' +
+      '<button type="button" class="secondary" data-preview-select-none>Clear all</button>' +
+      '</div>' +
+      '</div>' +
+      '<div class="preview-table-wrap"><table class="preview-table"><thead><tr>' +
+      '<th class="preview-col-check">Add</th><th class="preview-col-index">#</th><th class="preview-col-raw">Raw Text</th><th class="preview-col-title">Title</th><th class="preview-col-summary">Summary</th><th class="preview-col-del"></th></tr></thead><tbody>';
     for (var i = 0; i < S.previewRows.length; i++) {
       var r = S.previewRows[i];
-      html += '<tr data-preview-row="' + i + '">' +
+      html += '<tr data-preview-row="' + i + '"' + (r.include === false ? ' class="preview-row-off"' : '') + '>' +
         '<td><input type="checkbox" data-preview-include' +
         (r.include === false ? "" : " checked") +
-        '></td>' +
+        ' aria-label="Select row ' +
+        (i + 1) +
+        '"></td>' +
         '<td>' + (i + 1) + '</td>' +
         '<td><textarea data-preview-raw>' + escapeHtml(r.raw_text) + '</textarea></td>' +
         '<td><input type="text" data-preview-title value="' + escapeAttr(r.title) + '"></td>' +
@@ -1467,7 +1489,30 @@
           S.previewRows[idx].summary = ev.target.value;
         }
       });
+      previewRoot.addEventListener("change", function (ev) {
+        if (!ev.target.hasAttribute("data-preview-include")) return;
+        var row = ev.target.closest("[data-preview-row]");
+        if (!row) return;
+        var idx = Number(row.getAttribute("data-preview-row"));
+        if (isNaN(idx) || !S.previewRows[idx]) return;
+        S.previewRows[idx].include = !!ev.target.checked;
+        paintPreviewModal();
+      });
       previewRoot.addEventListener("click", function (ev) {
+        if (ev.target.hasAttribute("data-preview-select-all")) {
+          S.previewRows.forEach(function (r) {
+            r.include = true;
+          });
+          paintPreviewModal();
+          return;
+        }
+        if (ev.target.hasAttribute("data-preview-select-none")) {
+          S.previewRows.forEach(function (r) {
+            r.include = false;
+          });
+          paintPreviewModal();
+          return;
+        }
         if (!ev.target.hasAttribute("data-preview-delete")) return;
         var row = ev.target.closest("[data-preview-row]");
         if (!row) return;
