@@ -6,12 +6,86 @@
 var APP_CONFIG = {
   SS_ID: "1I7uKQc4Zm0Ak9YLdDPRZLiLQb2V5hO-N9jle_UJlO9Q",
   SHEET_GID: 2116546896,
+  DEBUG_LOG_SHEET: "Logs",
 };
 
 function jsonOut_(obj) {
   return ContentService.createTextOutput(JSON.stringify(obj)).setMimeType(
     ContentService.MimeType.JSON
   );
+}
+
+function getDebugSheet_() {
+  var ss = SpreadsheetApp.openById(APP_CONFIG.SS_ID);
+  var name = APP_CONFIG.DEBUG_LOG_SHEET || "Logs";
+  var sh = ss.getSheetByName(name);
+  if (!sh) {
+    sh = ss.insertSheet(name);
+  }
+  if (sh.getLastRow() < 1) {
+    sh
+      .getRange(1, 1, 1, 5)
+      .setValues([["logged_at", "level", "message", "data_json", "actor"]]);
+  }
+  return sh;
+}
+
+function writeDebugSheetLog_(level, message, data) {
+  try {
+    var sh = getDebugSheet_();
+    var actor = "";
+    try {
+      actor = Session.getActiveUser().getEmail() || "";
+    } catch (_) {
+      actor = "";
+    }
+    var payload = "";
+    if (typeof data !== "undefined") {
+      try {
+        payload = JSON.stringify(data);
+      } catch (_) {
+        payload = String(data);
+      }
+    }
+    if (payload.length > 50000) payload = payload.slice(0, 50000);
+    sh.appendRow([
+      formatDateTime_(new Date()),
+      String(level || "INFO"),
+      String(message || ""),
+      payload,
+      actor,
+    ]);
+  } catch (_) {
+    // Never break API response because logging failed.
+  }
+}
+
+function logLine_(level, message, data) {
+  var line = "[DiaryAPI][" + level + "] " + message;
+  if (typeof data !== "undefined") {
+    try {
+      line += " " + JSON.stringify(data);
+    } catch (_) {
+      line += " " + String(data);
+    }
+  }
+
+  // Guaranteed sheet-level fallback for production diagnostics.
+  writeDebugSheetLog_(level, message, data);
+  Logger.log(line);
+}
+
+function payloadSummary_(payload) {
+  var p = payload || {};
+  return {
+    keys: Object.keys(p),
+    has_raw_text: !!(p.raw_text && String(p.raw_text).trim()),
+    raw_text_len: p.raw_text == null ? 0 : String(p.raw_text).length,
+    has_text: !!(p.text && String(p.text).trim()),
+    text_len: p.text == null ? 0 : String(p.text).length,
+    logs_len: Array.isArray(p.logs) ? p.logs.length : 0,
+    id: p.id == null ? "" : String(p.id),
+  };
 }
 
 /** GET JSON API. Supports ?action=list */
@@ -41,16 +115,52 @@ function doGet(e) {
  * Body schema: { action: "...", payload: {...} }
  */
 function doPost(e) {
+  var requestId = Utilities.getUuid();
+  var started = new Date().getTime();
   try {
     var body = {};
+    var raw = "";
+
+    logLine_("INFO", "doPost received", {
+      requestId: requestId,
+      hasPostData: !!(e && e.postData),
+      hasContents: !!(e && e.postData && e.postData.contents),
+    });
+
     if (e.postData && e.postData.contents) {
-      var raw = String(e.postData.contents).trim();
+      raw = String(e.postData.contents).trim();
       body = JSON.parse(raw);
     } else {
+      logLine_("ERROR", "doPost missing JSON body", { requestId: requestId });
       return jsonOut_({ ok: false, error: "Expected JSON body" });
     }
-    return jsonOut_(dispatchAction_(body.action, body.payload || {}));
+
+    var action = String(body.action || "");
+    var payload = body.payload || {};
+    logLine_("INFO", "doPost dispatch", {
+      requestId: requestId,
+      action: action,
+      payload: payloadSummary_(payload),
+      raw_len: raw.length,
+    });
+
+    var out = dispatchAction_(action, payload);
+    logLine_("INFO", "doPost completed", {
+      requestId: requestId,
+      action: action,
+      ok: !!(out && out.ok),
+      error: out && out.error ? String(out.error).slice(0, 300) : "",
+      imported_count: out && out.imported_count ? out.imported_count : 0,
+      elapsed_ms: new Date().getTime() - started,
+    });
+    return jsonOut_(out);
   } catch (err) {
+    logLine_("ERROR", "doPost exception", {
+      requestId: requestId,
+      message: String(err && err.message ? err.message : err),
+      stack: err && err.stack ? String(err.stack).slice(0, 1200) : "",
+      elapsed_ms: new Date().getTime() - started,
+    });
     return jsonOut_({ ok: false, error: String(err.message || err) });
   }
 }
@@ -176,4 +286,21 @@ function parseDiaryLogsJson_(raw) {
     return { ok: false, error: "AI output must be an object with logs array" };
   }
   return { ok: true, logs: data.logs };
+}
+
+/**
+ * Manual auth probe.
+ * Run once in Apps Script editor (as deployment owner) to grant
+ * script.external_request before using ai_diary_input from web clients.
+ */
+function testUrlFetchPermission_() {
+  var res = UrlFetchApp.fetch("https://httpbin.org/get", {
+    method: "get",
+    muteHttpExceptions: true,
+  });
+  return {
+    ok: true,
+    status: res.getResponseCode(),
+    body_preview: String(res.getContentText() || "").slice(0, 200),
+  };
 }
