@@ -422,54 +422,52 @@
     var root = $("import-modal");
     var body = $("import-modal-body");
     if (!root || !body) return;
-    var totalTry = (data.imported_count || 0) + (data.error_count || 0);
-    var rows = [
-      ["Rows processed", String(totalTry)],
-      [
-        "Imported OK",
-        String(data.imported_count != null ? data.imported_count : "—"),
-      ],
-      ["Failed", String(data.error_count != null ? data.error_count : "—")],
-    ];
+    var okCount = Number(data && data.imported_count ? data.imported_count : 0);
+    var failCount = Number(data && data.error_count ? data.error_count : 0);
+    var totalTry = okCount + failCount;
+    var allSuccess = totalTry > 0 && failCount === 0;
+
     var html =
-      '<table class="stats-table"><thead><tr><th>Metric</th><th>Value</th></tr></thead><tbody>';
-    var r;
-    for (r = 0; r < rows.length; r++) {
-      html +=
-        "<tr><td>" +
-        escapeHtml(rows[r][0]) +
-        "</td><td>" +
-        escapeHtml(rows[r][1]) +
-        "</td></tr>";
-    }
-    html += "</tbody></table>";
-    if (data.imported_ids && data.imported_ids.length) {
-      var ids = data.imported_ids.slice(0, 50);
-      html +=
-        '<p class="stats-table-note">New entry IDs (up to 50): ' +
-        escapeHtml(ids.join(", ")) +
-        "</p>";
-      if (data.imported_ids.length > 50) {
-        html +=
-          '<p class="stats-table-note">…and ' +
-          (data.imported_ids.length - 50) +
-          " more.</p>";
-      }
-    }
+      '<div class="import-result-summary ' +
+      (allSuccess ? "import-result-success" : "import-result-mixed") +
+      '">' +
+      '<h3 class="import-result-title">' +
+      (allSuccess ? "Entries added successfully" : "Import completed with some issues") +
+      "</h3>" +
+      '<p class="import-result-lead">' +
+      (allSuccess
+        ? "Your selected entries were saved to the diary."
+        : "Some entries were saved, and some could not be added.") +
+      "</p>" +
+      "</div>";
+
+    html +=
+      '<table class="stats-table"><thead><tr><th>Summary</th><th>Count</th></tr></thead><tbody>' +
+      "<tr><td>Total selected</td><td>" +
+      escapeHtml(String(totalTry)) +
+      "</td></tr>" +
+      "<tr><td>Added</td><td>" +
+      escapeHtml(String(okCount)) +
+      "</td></tr>" +
+      "<tr><td>Not added</td><td>" +
+      escapeHtml(String(failCount)) +
+      "</td></tr>" +
+      "</tbody></table>";
+
     if (data.errors && data.errors.length) {
-      html +=
-        '<h3 class="modal-subhead">Error detail</h3><table class="stats-table"><thead><tr><th>Log #</th><th>Message</th></tr></thead><tbody>';
+      html += '<h3 class="modal-subhead">What needs attention</h3><ul class="import-error-list">';
       var ei;
-      for (ei = 0; ei < data.errors.length; ei++) {
+      for (ei = 0; ei < Math.min(data.errors.length, 8); ei++) {
         var er = data.errors[ei];
-        html +=
-          "<tr><td>" +
-          escapeHtml(String(er.index)) +
-          "</td><td>" +
-          escapeHtml(String(er.error || "")) +
-          "</td></tr>";
+        html += "<li>" + escapeHtml(String(er.error || "Unable to add one entry.")) + "</li>";
       }
-      html += "</tbody></table>";
+      if (data.errors.length > 8) {
+        html +=
+          "<li>And " +
+          escapeHtml(String(data.errors.length - 8)) +
+          " more entries were not added.</li>";
+      }
+      html += "</ul>";
     }
     body.innerHTML = html;
     root.hidden = false;

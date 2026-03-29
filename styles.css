@@ -460,6 +460,38 @@ button.secondary {
   font-size: 0.78rem;
   color: var(--muted);
 }
+.import-result-summary {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 0.65rem 0.8rem;
+  margin-bottom: 0.8rem;
+}
+.import-result-success {
+  background: rgba(79, 209, 197, 0.1);
+  border-color: rgba(79, 209, 197, 0.35);
+}
+.import-result-mixed {
+  background: rgba(251, 113, 133, 0.08);
+  border-color: rgba(251, 113, 133, 0.3);
+}
+.import-result-title {
+  margin: 0;
+  font-size: 0.95rem;
+}
+.import-result-lead {
+  margin: 0.35rem 0 0;
+  color: var(--muted);
+  font-size: 0.82rem;
+}
+.import-error-list {
+  margin: 0.35rem 0 0;
+  padding-left: 1.1rem;
+  color: #d7e4f7;
+  font-size: 0.84rem;
+}
+.import-error-list li + li {
+  margin-top: 0.25rem;
+}
 .preview-table-wrap {
   max-height: min(70vh, 720px);
   overflow: auto;
@@ -632,6 +664,11 @@ button.secondary {
 .edit-box { margin-top: 0.45rem; }
 .edit-box textarea { min-height: 105px; }
 .tiny-note { color: var(--muted); margin: 0.35rem 0 0; font-size: 0.75rem; }
+.ai-quota-note {
+  margin-top: 0.55rem;
+  line-height: 1.35;
+  color: #9fb6d7;
+}
 .err {
   margin-top: 0.7rem;
   color: #ffd3da;
