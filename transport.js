@@ -66,6 +66,9 @@ window.DiaryTransport = (function () {
       importLogs: function (payload) {
         return post("import", payload);
       },
+      aiDiaryInput: function (payload) {
+        return post("ai_diary_input", payload);
+      },
       appendTag: function (payload) {
         return post("append_tag", payload);
       },

@@ -794,6 +794,7 @@
   function normalizePreviewRows(logs) {
     return (logs || []).map(function (x) {
       return {
+        include: true,
         created_at: normalizeLineEndings(x.created_at || ""),
         raw_text: normalizeLineEndings(x.raw_text || ""),
         title: normalizeLineEndings(x.title || ""),
@@ -814,10 +815,13 @@
       return;
     }
     var html = '<div class="preview-table-wrap"><table class="preview-table"><thead><tr>' +
-      '<th>#</th><th>Raw Text</th><th>Title</th><th>Summary</th><th></th></tr></thead><tbody>';
+      '<th>Add</th><th>#</th><th>Raw Text</th><th>Title</th><th>Summary</th><th></th></tr></thead><tbody>';
     for (var i = 0; i < S.previewRows.length; i++) {
       var r = S.previewRows[i];
       html += '<tr data-preview-row="' + i + '">' +
+        '<td><input type="checkbox" data-preview-include' +
+        (r.include === false ? "" : " checked") +
+        '></td>' +
         '<td>' + (i + 1) + '</td>' +
         '<td><textarea data-preview-raw>' + escapeHtml(r.raw_text) + '</textarea></td>' +
         '<td><input type="text" data-preview-title value="' + escapeAttr(r.title) + '"></td>' +
@@ -846,7 +850,14 @@
 
   function processDiaryInputWithAi() {
     var inputEl = $("add-input");
-    if (!inputEl || !S.transport) return;
+    if (
+      !inputEl ||
+      !S.transport ||
+      typeof S.transport.aiDiaryInput !== "function"
+    ) {
+      setSaveError("AI transport is unavailable");
+      return;
+    }
     if (S.aiInFlight || isEffectivelyEmptyText(inputEl.value)) return;
 
     var source = stripDiaryInputPrefix(inputEl.value);
@@ -861,26 +872,21 @@
     syncAiProcessButton();
 
     Promise.resolve()
-      .then(function () {
-        return S.transport.importLogs({
-          logs: [
-            {
-              raw_text: source,
-              title: "",
-              summary: "",
-              tags: [],
-              sentiment: "Neutral",
-            },
-          ],
+      .then(loadDiaryInputRulePrompt)
+      .then(function (ruleText) {
+        return S.transport.aiDiaryInput({
+          text: source,
+          rule_prompt: ruleText,
         });
       })
       .then(function (res) {
-        inputEl.value = "";
-        openImportModal(res);
-        return loadEntries();
+        var rows = normalizePreviewRows(res.logs);
+        if (!rows.length) throw new Error("AI returned empty rows");
+        S.previewRows = rows;
+        openPreviewModal();
       })
       .catch(function (err) {
-        setSaveError((err && err.message) || "Add failed");
+        setSaveError((err && err.message) || "AI processing failed");
       })
       .finally(function () {
         endSync();
@@ -891,6 +897,13 @@
 
   function approvePreviewRows() {
     if (!S.previewRows.length || !S.transport || S.approveInFlight) return;
+    var approvedRows = S.previewRows.filter(function (x) {
+      return x.include !== false && !isEffectivelyEmptyText(x.raw_text);
+    });
+    if (!approvedRows.length) {
+      setSaveError("Select at least one row to approve");
+      return;
+    }
     S.approveInFlight = true;
     beginSync();
     setSaveError("");
@@ -900,7 +913,7 @@
       approveBtn.textContent = "Saving...";
     }
     S.transport
-      .importLogs({ logs: S.previewRows })
+      .importLogs({ logs: approvedRows })
       .then(function (data) {
         var inputEl = $("add-input");
         if (inputEl) inputEl.value = "";
@@ -1444,7 +1457,9 @@
         if (!row) return;
         var idx = Number(row.getAttribute("data-preview-row"));
         if (isNaN(idx) || !S.previewRows[idx]) return;
-        if (ev.target.hasAttribute("data-preview-raw")) {
+        if (ev.target.hasAttribute("data-preview-include")) {
+          S.previewRows[idx].include = !!ev.target.checked;
+        } else if (ev.target.hasAttribute("data-preview-raw")) {
           S.previewRows[idx].raw_text = ev.target.value;
         } else if (ev.target.hasAttribute("data-preview-title")) {
           S.previewRows[idx].title = ev.target.value;
